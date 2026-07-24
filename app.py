@@ -2,7 +2,9 @@ import os
 import time
 import json
 import math
+import sqlite3
 import threading
+import urllib.request
 from datetime import datetime
 from pathlib import Path
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -15,6 +17,80 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 from generator import generate_honeytokens, DEPARTMENT_PROMPTS
+
+# ── SQLite Database (production persistence layer) ──────────────────
+DB_PATH = os.environ.get("EMBER_DB", "ember.db")
+_db_lock = threading.Lock()
+
+
+def _init_db():
+    with _db_lock:
+        conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS events ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "timestamp TEXT NOT NULL,"
+            "type TEXT NOT NULL,"
+            "target TEXT,"
+            "ip TEXT DEFAULT '',"
+            "ua TEXT DEFAULT ''"
+            ")"
+        )
+        conn.commit()
+    return conn
+
+
+_db_conn = _init_db()
+
+
+def _db_insert(ts, ev_type, target, ip="", ua=""):
+    with _db_lock:
+        _db_conn.execute(
+            "INSERT INTO events (timestamp, type, target, ip, ua) VALUES (?, ?, ?, ?, ?)",
+            (ts, ev_type, target, ip, ua),
+        )
+        _db_conn.commit()
+
+
+def _db_query(limit=100):
+    with _db_lock:
+        rows = _db_conn.execute(
+            "SELECT timestamp, type, target, ip, ua FROM events ORDER BY id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    return [(r[0], r[1], r[2], r[3], r[4]) for r in rows]
+
+
+def _db_count():
+    with _db_lock:
+        return _db_conn.execute("SELECT COUNT(*) FROM events").fetchone()[0]
+
+
+def _db_count_by_type(ev_type):
+    with _db_lock:
+        return _db_conn.execute("SELECT COUNT(*) FROM events WHERE type=?", (ev_type,)).fetchone()[0]
+
+
+def _db_clear():
+    with _db_lock:
+        _db_conn.execute("DELETE FROM events")
+        _db_conn.commit()
+
+
+# ── Slack Webhook ───────────────────────────────────────────────────
+def _send_slack(webhook_url, text):
+    if not webhook_url:
+        return
+    try:
+        payload = json.dumps({"text": text}).encode()
+        req = urllib.request.Request(
+            webhook_url, data=payload,
+            headers={"Content-Type": "application/json"},
+        )
+        urllib.request.urlopen(req, timeout=5)
+    except Exception:
+        pass
+
 
 # ── Config ─────────────────────────────────────────────────────────────
 ALERTS_LOG = os.environ.get("EMBER_ALERTS_LOG", "alerts.log")
@@ -85,6 +161,7 @@ class TrackingHandler(BaseHTTPRequestHandler):
             line = f"{ts}|TRACK|{filename}|{ip}|{ua}\n"
             with open(ALERTS_LOG, "a") as f:
                 f.write(line)
+            _db_insert(ts, "TRACK", filename, ip, ua)
             self.send_response(200)
             self.send_header("Content-Type", "image/gif")
             self.send_header("Content-Length", str(len(PIXEL_GIF)))
@@ -136,22 +213,106 @@ st.set_page_config(
     menu_items=None,
 )
 
-# ── Styles ────────────────────────────────────────────────────────────
+# ── Styles (Dark Security Theme) ────────────────────────────────────
 st.markdown(
     """
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 <style>
-div[data-testid="stMetricValue"] { font-size: 2rem; }
-.stAlert { border-left: 5px solid #d32f2f !important; }
-.bi { font-size: 1.1em; }
-h1 .bi { font-size: 1.2em; }
-@keyframes flashRed {
-    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(198,40,40,0.4); }
-    50% { opacity: 0.6; box-shadow: 0 0 25px 12px rgba(198,40,40,0.15); }
-}
-.flash-node {
-    animation: flashRed 1s ease-in-out infinite;
-}
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap');
+
+    * { font-family: 'Inter', sans-serif; }
+    .stApp { background: #0a0e17; }
+    .main > div { background: #0a0e17; }
+
+    h1, h2, h3 { font-family: 'Inter', sans-serif !important; font-weight: 700 !important; }
+    h1 { color: #e0e0e0 !important; letter-spacing: -0.5px; }
+    h3 { color: #c0c0c0 !important; font-size: 1rem !important; text-transform: uppercase; letter-spacing: 1.5px; }
+
+    .stButton button {
+        background: linear-gradient(135deg, #1a237e, #283593) !important;
+        color: #fff !important;
+        border: 1px solid rgba(255,255,255,0.1) !important;
+        border-radius: 8px !important;
+        font-weight: 600 !important;
+        transition: all 0.3s ease !important;
+    }
+    .stButton button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 20px rgba(26,35,126,0.4);
+    }
+    button[kind="primary"] {
+        background: linear-gradient(135deg, #c62828, #b71c1c) !important;
+    }
+    button[kind="primary"]:hover {
+        box-shadow: 0 4px 20px rgba(198,40,40,0.4) !important;
+    }
+
+    div[data-testid="stMetricValue"] {
+        font-family: 'JetBrains Mono', monospace !important;
+        font-size: 2.2rem !important;
+        font-weight: 700 !important;
+        color: #e0e0e0 !important;
+    }
+    div[data-testid="stMetricLabel"] {
+        font-size: 0.75rem !important;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: #888 !important;
+    }
+    div[data-testid="metric-container"] {
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 12px;
+        padding: 16px;
+    }
+
+    .stAlert { border-left: 4px solid #c62828 !important; background: rgba(198,40,40,0.08) !important; }
+    .stInfo { border-left: 4px solid #1a73e8 !important; background: rgba(26,115,232,0.08) !important; }
+    .stSuccess { border-left: 4px solid #2e7d32 !important; background: rgba(46,125,50,0.08) !important; }
+    .stWarning { border-left: 4px solid #f57f17 !important; background: rgba(245,127,23,0.08) !important; }
+
+    .stTextInput input, .stSelectbox, .stNumberInput input {
+        background: rgba(255,255,255,0.05) !important;
+        border: 1px solid rgba(255,255,255,0.1) !important;
+        border-radius: 8px !important;
+        color: #e0e0e0 !important;
+    }
+    .stTextInput input:focus {
+        border-color: #1a73e8 !important;
+        box-shadow: 0 0 0 2px rgba(26,115,232,0.2) !important;
+    }
+
+    .st-bq { background: rgba(255,255,255,0.02) !important; border: 1px solid rgba(255,255,255,0.06) !important; border-radius: 12px !important; }
+    .stSidebar { background: rgba(10,14,23,0.95) !important; border-right: 1px solid rgba(255,255,255,0.06) !important; }
+    .stSidebar .st-bq { background: transparent !important; border: none !important; }
+
+    div[data-testid="stExpander"] {
+        background: rgba(255,255,255,0.02) !important;
+        border: 1px solid rgba(255,255,255,0.06) !important;
+        border-radius: 12px !important;
+    }
+
+    .stDataFrame { background: rgba(255,255,255,0.02) !important; border-radius: 8px !important; }
+    .stDataFrame th { font-size: 0.7rem !important; text-transform: uppercase; letter-spacing: 1px; color: #888 !important; }
+    .stDataFrame td { font-size: 0.8rem !important; color: #ccc !important; font-family: 'JetBrains Mono', monospace !important; }
+
+    .stCode { background: rgba(255,255,255,0.03) !important; border: 1px solid rgba(255,255,255,0.06) !important; }
+    .stSpinner > div { border-color: #c62828 transparent transparent transparent !important; }
+
+    .stCaption { color: #666 !important; }
+    hr { border-color: rgba(255,255,255,0.06) !important; }
+
+    @keyframes flashRed {
+        0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(198,40,40,0.4); }
+        50% { opacity: 0.6; box-shadow: 0 0 25px 12px rgba(198,40,40,0.15); }
+    }
+    .flash-node { animation: flashRed 1s ease-in-out infinite; }
+
+    @keyframes slideDown {
+        from { transform: translateY(-100%); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
+    }
+    .alert-banner { animation: slideDown 0.3s ease-out; }
 </style>
 """,
     unsafe_allow_html=True,
@@ -177,6 +338,7 @@ try:
         ts = datetime.now().isoformat()
         with open(ALERTS_LOG, "a") as f:
             f.write(f"{ts}|TRACK|{fname}|127.0.0.1|streamlit-intercept\n")
+        _db_insert(ts, "TRACK", fname, "127.0.0.1", "streamlit-intercept")
 except Exception:
     pass
 
@@ -188,27 +350,36 @@ _ensure_tracking_server()
 
 def parse_alerts():
     accessed = set()
-    events = []
-    if not os.path.exists(ALERTS_LOG):
-        return accessed, events
-    with open(ALERTS_LOG, "r") as f:
-        for raw in f:
-            raw = raw.strip()
-            if not raw:
-                continue
-            parts = raw.split("|", 4)
-            try:
-                ts_str = parts[0]
-                ev_type = parts[1]
-                target = parts[2]
-                ip = parts[3] if len(parts) > 3 else ""
-                detail = parts[4] if len(parts) > 4 else ""
-            except (IndexError, ValueError):
-                continue
-            if ev_type in ("TRACK", "MODIFIED", "DELETED", "MOVED"):
-                accessed.add(target)
-            events.append((ts_str, ev_type, target, ip, detail))
-    return accessed, events
+    all_events = _db_query(500)
+    # Merge legacy alerts.log entries for backward compat
+    if os.path.exists(ALERTS_LOG):
+        with open(ALERTS_LOG, "r") as f:
+            for raw in f:
+                raw = raw.strip()
+                if not raw:
+                    continue
+                parts = raw.split("|", 4)
+                try:
+                    ts_str = parts[0]
+                    ev_type = parts[1]
+                    target = parts[2]
+                    ip = parts[3] if len(parts) > 3 else ""
+                    detail = parts[4] if len(parts) > 4 else ""
+                except (IndexError, ValueError):
+                    continue
+                all_events.append((ts_str, ev_type, target, ip, detail))
+    # Deduplicate by (timestamp, type, target)
+    seen = set()
+    unique = []
+    for ev in all_events:
+        key = (ev[0], ev[1], ev[2])
+        if key not in seen:
+            seen.add(key)
+            unique.append(ev)
+            if ev[1] in ("TRACK", "MODIFIED", "DELETED", "MOVED"):
+                accessed.add(ev[2])
+    unique.sort(key=lambda x: x[0])
+    return accessed, unique
 
 
 def build_static_graph(company_name, manifest_entries):
@@ -295,12 +466,12 @@ def draw_graph(G, pos, accessed_files, container):
             node_sizes.append(2200)
 
     fig, ax = plt.subplots(figsize=(20, 12))
-    fig.patch.set_facecolor("#ffffff")
-    ax.set_facecolor("#fafafa")
+    fig.patch.set_facecolor("#0d1117")
+    ax.set_facecolor("#0d1117")
 
     nx.draw_networkx_edges(
         G, pos, ax=ax,
-        edge_color="#aaa",
+        edge_color="#444",
         arrows=True,
         arrowsize=25,
         arrowstyle="-|>",
@@ -312,7 +483,7 @@ def draw_graph(G, pos, accessed_files, container):
         G, pos, ax=ax,
         node_color=node_colors,
         node_size=node_sizes,
-        edgecolors="#333",
+        edgecolors="#666",
         linewidths=3,
     )
 
@@ -331,14 +502,14 @@ def draw_graph(G, pos, accessed_files, container):
                 G, pos, ax=ax,
                 labels=filtered,
                 font_size=font_sz,
-                font_color="#000",
+                font_color="#e0e0e0",
                 font_weight="bold",
-                bbox=dict(facecolor="white", edgecolor="#ccc", alpha=0.95, pad=5, boxstyle="round,pad=0.4"),
+                bbox=dict(facecolor="#1a1a2e", edgecolor="#333", alpha=0.95, pad=5, boxstyle="round,pad=0.4"),
             )
 
     ax.set_title(
         "Project Ember — HoneyToken Minefield",
-        fontsize=24, fontweight="bold", color="#1a1a2e", pad=20,
+        fontsize=24, fontweight="bold", color="#e0e0e0", pad=20,
     )
     ax.axis("off")
     fig.tight_layout()
@@ -348,14 +519,20 @@ def draw_graph(G, pos, accessed_files, container):
 
 # ── UI ────────────────────────────────────────────────────────────────
 st.markdown(
-    "<h1 style='display:flex; align-items:center; gap:10px;'>"
-    "<i class='bi bi-activity' style='font-size:2rem; color:#e65100;'></i> "
-    "<span>Project Ember</span></h1>",
+    "<h1 style='display:flex; align-items:center; gap:12px; margin-bottom:0;'>"
+    "<span style='background:linear-gradient(135deg,#c62828,#ff1744); "
+    "width:40px; height:40px; border-radius:10px; display:flex; "
+    "align-items:center; justify-content:center; font-size:1.4rem;'>"
+    "<i class='bi bi-activity' style='color:#fff;'></i></span> "
+    "<span style='background:linear-gradient(135deg,#e0e0e0,#fff); "
+    "-webkit-background-clip:text; -webkit-text-fill-color:transparent;'>"
+    "Project Ember</span></h1>",
     unsafe_allow_html=True,
 )
 st.markdown(
-    "<p style='color:#888; margin-top:-12px;'><em>The AI HoneyToken Factory — "
-    "Deploy intelligent decoys to trap ransomware &amp; malicious insiders</em></p>",
+    "<p style='color:#666; margin-top:-8px; font-size:0.9rem; letter-spacing:0.5px;'>"
+    "<i class='bi bi-shield-check' style='margin-right:6px;'></i>"
+    "The AI HoneyToken Factory — Deploy intelligent decoys to trap ransomware &amp; malicious insiders</p>",
     unsafe_allow_html=True,
 )
 
@@ -416,8 +593,21 @@ with st.sidebar:
     with col2:
         if st.button("Clear Alerts", width="stretch"):
             open(ALERTS_LOG, "w").close()
+            _db_clear()
             st.session_state.accessed_files = set()
             st.rerun()
+
+    with st.expander("Notifications & Deployment", expanded=False):
+        slack_url = st.text_input(
+            "Slack Webhook URL",
+            placeholder="https://hooks.slack.com/services/...",
+            help="Paste a Slack Incoming Webhook URL to get push alerts on your phone",
+        )
+        smb_path = st.text_input(
+            "Deploy Target Path",
+            placeholder="/mnt/fileserver/shared/ or //SERVER/share",
+            help="SMB/network path to auto-deploy honeytokens (optional)",
+        )
     
     st.divider()
     st.markdown(
@@ -445,6 +635,21 @@ if deploy_btn:
             )
             for entry in manifest:
                 st.code(f"  {entry['file']}  —  tracking: {entry['tracking_id']}")
+
+            # Auto-deploy to SMB/network path if configured
+            if smb_path.strip():
+                import shutil
+                smb_dest = Path(smb_path.strip())
+                try:
+                    smb_dest.mkdir(parents=True, exist_ok=True)
+                    for entry in manifest:
+                        src = Path(output_dir) / entry["file"]
+                        dst = smb_dest / entry["file"]
+                        shutil.copy2(src, dst)
+                    st.success(f"Also deployed to network path: `{smb_dest}/`")
+                except Exception as smb_err:
+                    st.warning(f"Network deploy failed: {smb_err}")
+
             time.sleep(0.5)
             st.rerun()
         except Exception as e:
@@ -537,12 +742,13 @@ def render_static_panels(events):
         with mcol1:
             st.metric("Active Tokens", total_tokens)
         with mcol2:
-            st.metric("Tracking Hits", sum(1 for e in events if e[1] == "TRACK"))
+            st.metric("Tracking Hits", _db_count_by_type("TRACK"))
         with mcol3:
-            fs_events = sum(1 for e in events if e[1] in ("CREATED", "MODIFIED", "DELETED", "MOVED"))
-            st.metric("Filesystem Events", fs_events)
+            st.metric("Filesystem Events",
+                _db_count_by_type("CREATED") + _db_count_by_type("MODIFIED")
+                + _db_count_by_type("DELETED") + _db_count_by_type("MOVED"))
         with mcol4:
-            st.metric("Total Events", len(events))
+            st.metric("Total Events", _db_count())
 
     with log_placeholder.container():
         with st.expander("Full Event Log", expanded=False):
@@ -578,9 +784,23 @@ def event_poller():
         except (ValueError, IndexError):
             pass
  
-    # Sound on new events (fires once)
+    # Sound + Slack on new events
     if new_count > 0:
         st.session_state.prev_event_count = n
+
+        # Send Slack alert
+        if latest_events:
+            latest = latest_events[0]
+            slack_text = (
+                f"🚨 *Project Ember — Intrusion Detected*\n"
+                f"• *File:* `{latest[2]}`\n"
+                f"• *Type:* `{latest[1]}`\n"
+                f"• *Time:* `{latest[0]}`\n"
+                f"• *IP:* `{latest[3]}` ({geoip(latest[3])})\n"
+                f"• *Browser:* `{latest[4][:80]}`"
+            )
+            _send_slack(slack_url, slack_text)
+
         components.html(
             """
             <script>
