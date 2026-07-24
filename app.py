@@ -25,7 +25,9 @@ _db_lock = threading.Lock()
 
 def _init_db():
     with _db_lock:
-        conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+        conn = sqlite3.connect(DB_PATH, timeout=30.0, check_same_thread=False)
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA busy_timeout=30000")
         conn.execute(
             "CREATE TABLE IF NOT EXISTS events ("
             "id INTEGER PRIMARY KEY AUTOINCREMENT,"
@@ -77,19 +79,23 @@ def _db_clear():
         _db_conn.commit()
 
 
-# ── Slack Webhook ───────────────────────────────────────────────────
+# ── Async Slack Webhook (background thread, never blocks UI) ─────────
 def _send_slack(webhook_url, text):
     if not webhook_url:
         return
-    try:
-        payload = json.dumps({"text": text}).encode()
-        req = urllib.request.Request(
-            webhook_url, data=payload,
-            headers={"Content-Type": "application/json"},
-        )
-        urllib.request.urlopen(req, timeout=5)
-    except Exception:
-        pass
+
+    def _fire():
+        try:
+            payload = json.dumps({"text": text}).encode()
+            req = urllib.request.Request(
+                webhook_url, data=payload,
+                headers={"Content-Type": "application/json"},
+            )
+            urllib.request.urlopen(req, timeout=5)
+        except Exception:
+            pass
+
+    threading.Thread(target=_fire, daemon=True).start()
 
 
 # ── Config ─────────────────────────────────────────────────────────────
@@ -213,100 +219,121 @@ st.set_page_config(
     menu_items=None,
 )
 
-# ── Styles (Dark Security Theme) ────────────────────────────────────
+# ── Styles (High-Contrast Dark Theme — Optimized for Projectors) ────
 st.markdown(
     """
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700;800&family=Inter:wght@500;600;700;800&display=swap');
 
     * { font-family: 'Inter', sans-serif; }
     .stApp { background: #0a0e17; }
     .main > div { background: #0a0e17; }
 
-    h1, h2, h3 { font-family: 'Inter', sans-serif !important; font-weight: 700 !important; }
-    h1 { color: #e0e0e0 !important; letter-spacing: -0.5px; }
-    h3 { color: #c0c0c0 !important; font-size: 1rem !important; text-transform: uppercase; letter-spacing: 1.5px; }
+    h1, h2, h3 { font-family: 'Inter', sans-serif !important; font-weight: 800 !important; }
+    h1 { color: #ffffff !important; letter-spacing: -0.5px; font-size: 2rem !important; }
+    h3 { color: #ffffff !important; font-size: 1rem !important; text-transform: uppercase; letter-spacing: 2px; }
 
     .stButton button {
-        background: linear-gradient(135deg, #1a237e, #283593) !important;
-        color: #fff !important;
-        border: 1px solid rgba(255,255,255,0.1) !important;
+        background: linear-gradient(135deg, #1565c0, #1976d2) !important;
+        color: #ffffff !important;
+        border: 2px solid rgba(255,255,255,0.2) !important;
         border-radius: 8px !important;
-        font-weight: 600 !important;
+        font-weight: 700 !important;
+        font-size: 0.95rem !important;
         transition: all 0.3s ease !important;
     }
     .stButton button:hover {
         transform: translateY(-1px);
-        box-shadow: 0 4px 20px rgba(26,35,126,0.4);
+        box-shadow: 0 4px 24px rgba(21,101,192,0.5);
     }
     button[kind="primary"] {
-        background: linear-gradient(135deg, #c62828, #b71c1c) !important;
+        background: linear-gradient(135deg, #d32f2f, #f44336) !important;
+        border: 2px solid rgba(255,255,255,0.3) !important;
     }
     button[kind="primary"]:hover {
-        box-shadow: 0 4px 20px rgba(198,40,40,0.4) !important;
+        box-shadow: 0 4px 24px rgba(211,47,47,0.5) !important;
     }
 
     div[data-testid="stMetricValue"] {
         font-family: 'JetBrains Mono', monospace !important;
-        font-size: 2.2rem !important;
-        font-weight: 700 !important;
-        color: #e0e0e0 !important;
+        font-size: 2.5rem !important;
+        font-weight: 800 !important;
+        color: #ffffff !important;
     }
     div[data-testid="stMetricLabel"] {
-        font-size: 0.75rem !important;
+        font-size: 0.8rem !important;
         text-transform: uppercase;
-        letter-spacing: 1px;
-        color: #888 !important;
+        letter-spacing: 1.5px;
+        color: #aaa !important;
+        font-weight: 600 !important;
     }
     div[data-testid="metric-container"] {
-        background: rgba(255,255,255,0.03);
-        border: 1px solid rgba(255,255,255,0.06);
+        background: rgba(255,255,255,0.05);
+        border: 1px solid rgba(255,255,255,0.12);
         border-radius: 12px;
         padding: 16px;
     }
 
-    .stAlert { border-left: 4px solid #c62828 !important; background: rgba(198,40,40,0.08) !important; }
-    .stInfo { border-left: 4px solid #1a73e8 !important; background: rgba(26,115,232,0.08) !important; }
-    .stSuccess { border-left: 4px solid #2e7d32 !important; background: rgba(46,125,50,0.08) !important; }
-    .stWarning { border-left: 4px solid #f57f17 !important; background: rgba(245,127,23,0.08) !important; }
+    .stAlert { border-left: 5px solid #f44336 !important; background: rgba(244,67,54,0.12) !important; }
+    .stAlert p { color: #ffffff !important; font-weight: 600 !important; }
+    .stInfo { border-left: 5px solid #42a5f5 !important; background: rgba(66,165,245,0.12) !important; }
+    .stInfo p { color: #ffffff !important; }
+    .stSuccess { border-left: 5px solid #66bb6a !important; background: rgba(102,187,106,0.12) !important; }
+    .stSuccess p { color: #ffffff !important; }
+    .stWarning { border-left: 5px solid #ffa726 !important; background: rgba(255,167,38,0.12) !important; }
+    .stWarning p { color: #ffffff !important; }
 
     .stTextInput input, .stSelectbox, .stNumberInput input {
-        background: rgba(255,255,255,0.05) !important;
-        border: 1px solid rgba(255,255,255,0.1) !important;
+        background: rgba(255,255,255,0.08) !important;
+        border: 2px solid rgba(255,255,255,0.15) !important;
         border-radius: 8px !important;
-        color: #e0e0e0 !important;
+        color: #ffffff !important;
+        font-size: 1rem !important;
     }
     .stTextInput input:focus {
-        border-color: #1a73e8 !important;
-        box-shadow: 0 0 0 2px rgba(26,115,232,0.2) !important;
+        border-color: #42a5f5 !important;
+        box-shadow: 0 0 0 3px rgba(66,165,245,0.3) !important;
+    }
+    .stSelectbox div[data-baseweb="select"] > div {
+        border: 2px solid rgba(255,255,255,0.15) !important;
+        background: rgba(255,255,255,0.08) !important;
     }
 
-    .st-bq { background: rgba(255,255,255,0.02) !important; border: 1px solid rgba(255,255,255,0.06) !important; border-radius: 12px !important; }
-    .stSidebar { background: rgba(10,14,23,0.95) !important; border-right: 1px solid rgba(255,255,255,0.06) !important; }
+    .st-bq { background: rgba(255,255,255,0.04) !important; border: 1px solid rgba(255,255,255,0.1) !important; border-radius: 12px !important; }
+    .stSidebar { background: #0d1117 !important; border-right: 2px solid rgba(255,255,255,0.08) !important; }
     .stSidebar .st-bq { background: transparent !important; border: none !important; }
+    .stSidebar .stMarkdown p { color: #ccc !important; }
 
     div[data-testid="stExpander"] {
-        background: rgba(255,255,255,0.02) !important;
-        border: 1px solid rgba(255,255,255,0.06) !important;
+        background: rgba(255,255,255,0.03) !important;
+        border: 1px solid rgba(255,255,255,0.1) !important;
         border-radius: 12px !important;
     }
+    div[data-testid="stExpander"] summary p {
+        font-weight: 700 !important;
+        color: #ffffff !important;
+    }
 
-    .stDataFrame { background: rgba(255,255,255,0.02) !important; border-radius: 8px !important; }
-    .stDataFrame th { font-size: 0.7rem !important; text-transform: uppercase; letter-spacing: 1px; color: #888 !important; }
-    .stDataFrame td { font-size: 0.8rem !important; color: #ccc !important; font-family: 'JetBrains Mono', monospace !important; }
+    .stDataFrame { background: rgba(255,255,255,0.03) !important; border-radius: 8px !important; border: 1px solid rgba(255,255,255,0.08) !important; }
+    .stDataFrame th { font-size: 0.75rem !important; text-transform: uppercase; letter-spacing: 1.5px; color: #aaa !important; font-weight: 700 !important; }
+    .stDataFrame td { font-size: 0.85rem !important; color: #ffffff !important; font-family: 'JetBrains Mono', monospace !important; font-weight: 500 !important; }
 
-    .stCode { background: rgba(255,255,255,0.03) !important; border: 1px solid rgba(255,255,255,0.06) !important; }
-    .stSpinner > div { border-color: #c62828 transparent transparent transparent !important; }
+    .stCode { background: rgba(255,255,255,0.05) !important; border: 1px solid rgba(255,255,255,0.1) !important; color: #ffffff !important; }
+    .stCode code { color: #ffffff !important; }
+    .stSpinner > div { border-color: #f44336 transparent transparent transparent !important; border-width: 4px !important; }
 
-    .stCaption { color: #666 !important; }
-    hr { border-color: rgba(255,255,255,0.06) !important; }
+    .stCaption { color: #999 !important; font-size: 0.85rem !important; }
+    hr { border-color: rgba(255,255,255,0.1) !important; border-width: 1px !important; }
+
+    div[data-testid="stNotification"] { background: #1a1a2e !important; border: 1px solid #f44336 !important; }
+    div[data-testid="stNotification"] p { color: #ffffff !important; font-weight: 600 !important; }
 
     @keyframes flashRed {
-        0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(198,40,40,0.4); }
-        50% { opacity: 0.6; box-shadow: 0 0 25px 12px rgba(198,40,40,0.15); }
+        0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(244,67,54,0.6); }
+        50% { opacity: 0.5; box-shadow: 0 0 30px 15px rgba(244,67,54,0.2); }
     }
-    .flash-node { animation: flashRed 1s ease-in-out infinite; }
+    .flash-node { animation: flashRed 0.8s ease-in-out infinite; }
 
     @keyframes slideDown {
         from { transform: translateY(-100%); opacity: 0; }
