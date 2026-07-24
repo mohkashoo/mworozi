@@ -1,0 +1,7 @@
+streamlit
+google-genai
+watchdog
+networkx
+matplotlib
+faker
+pandas

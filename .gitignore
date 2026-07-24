@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.env
+alerts.log
+honeytokens/manifest.json
+honeytokens/*.html
+honeytokens/*.md
+honeytokens/*.txt
