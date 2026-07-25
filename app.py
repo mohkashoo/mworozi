@@ -263,9 +263,11 @@ st.markdown(
         border: 1px solid rgba(255,255,255,0.15) !important;
         border-radius: 10px !important;
         font-weight: 600 !important;
-        font-size: 0.9rem !important;
-        letter-spacing: 0.3px !important;
-        padding: 8px 20px !important;
+        font-size: 0.85rem !important;
+        letter-spacing: 0.5px !important;
+        padding: 6px 16px !important;
+        height: 38px !important;
+        line-height: 1 !important;
         transition: all 0.25s ease !important;
         box-shadow: 0 2px 8px rgba(0,0,0,0.2) !important;
     }
@@ -280,18 +282,20 @@ st.markdown(
     }
     button[kind="primary"] {
         background: linear-gradient(135deg, #c62828, #e53935) !important;
-        border: 1px solid rgba(255,255,255,0.2) !important;
-        font-weight: 700 !important;
+        border: 1px solid rgba(255,255,255,0.25) !important;
+        font-weight: 600 !important;
     }
     button[kind="primary"]:hover {
         box-shadow: 0 6px 24px rgba(198,40,40,0.4) !important;
-        border-color: rgba(255,255,255,0.35) !important;
+        border-color: rgba(255,255,255,0.4) !important;
     }
-    div[data-testid="column"]:has(button[kind="primary"]) {
-        padding-right: 4px !important;
+    .stButton {
+        width: 100% !important;
     }
-    div[data-testid="column"]:has(button:not([kind])) {
-        padding-left: 4px !important;
+    div[data-testid="column"] {
+        padding: 0 2px !important;
+        flex: 1 1 50% !important;
+        min-width: 0 !important;
     }
 
     div[data-testid="stMetricValue"] {
