@@ -600,7 +600,11 @@ st.markdown(
 
 # ── Sidebar: Configuration ───────────────────────────────────────────
 with st.sidebar:
-    st.header("Configuration")
+    st.markdown(
+        "<h3 style='display:flex;align-items:center;gap:8px;margin:0;padding:0;'>"
+        "<i class='bi bi-sliders' style='color:#42a5f5;'></i> Configuration</h3>",
+        unsafe_allow_html=True,
+    )
 
     company_name = st.text_input(
         "Company Name",
@@ -642,10 +646,13 @@ with st.sidebar:
         _s.connect(("8.8.8.8", 80))
         _lan_ip = _s.getsockname()[0]
         _s.close()
-        st.caption(
-            f"🌐 LAN IP: `{_lan_ip}` — use this for same-network demo. "
-            f"Dashboard: `http://{_lan_ip}:8501` | "
-            f"Tracking: `http://{_lan_ip}:8765`"
+        st.markdown(
+            f"<p style='color:#888;font-size:0.8rem;margin:0;padding:0;'>"
+            f"<i class='bi bi-wifi' style='font-size:0.8em;'></i>  "
+            f"LAN IP: <code>{_lan_ip}</code><br>"
+            f"Dashboard: <code>http://{_lan_ip}:8501</code><br>"
+            f"Tracking: <code>http://{_lan_ip}:8765</code></p>",
+            unsafe_allow_html=True,
         )
     except Exception:
         pass
@@ -697,7 +704,7 @@ with st.sidebar:
 
 # ── Deploy ────────────────────────────────────────────────────────────
 if deploy_btn:
-    with st.spinner("🧠 Gemini is crafting your honeytokens..."):
+    with st.spinner("Gemini is crafting your honeytokens..."):
         try:
             manifest = generate_honeytokens(
                 company_name=company_name,
