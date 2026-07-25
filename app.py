@@ -258,24 +258,40 @@ st.markdown(
     h3 { color: #ffffff !important; font-size: 1rem !important; text-transform: uppercase; letter-spacing: 2px; }
 
     .stButton button {
-        background: linear-gradient(135deg, #1565c0, #1976d2) !important;
+        background: linear-gradient(135deg, #1a237e, #283593) !important;
         color: #ffffff !important;
-        border: 2px solid rgba(255,255,255,0.2) !important;
-        border-radius: 8px !important;
-        font-weight: 700 !important;
-        font-size: 0.95rem !important;
-        transition: all 0.3s ease !important;
+        border: 1px solid rgba(255,255,255,0.15) !important;
+        border-radius: 10px !important;
+        font-weight: 600 !important;
+        font-size: 0.9rem !important;
+        letter-spacing: 0.3px !important;
+        padding: 8px 20px !important;
+        transition: all 0.25s ease !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2) !important;
     }
     .stButton button:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 4px 24px rgba(21,101,192,0.5);
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(26,35,126,0.35) !important;
+        border-color: rgba(255,255,255,0.3) !important;
+    }
+    .stButton button:active {
+        transform: translateY(0);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;
     }
     button[kind="primary"] {
-        background: linear-gradient(135deg, #d32f2f, #f44336) !important;
-        border: 2px solid rgba(255,255,255,0.3) !important;
+        background: linear-gradient(135deg, #c62828, #e53935) !important;
+        border: 1px solid rgba(255,255,255,0.2) !important;
+        font-weight: 700 !important;
     }
     button[kind="primary"]:hover {
-        box-shadow: 0 4px 24px rgba(211,47,47,0.5) !important;
+        box-shadow: 0 6px 24px rgba(198,40,40,0.4) !important;
+        border-color: rgba(255,255,255,0.35) !important;
+    }
+    div[data-testid="column"]:has(button[kind="primary"]) {
+        padding-right: 4px !important;
+    }
+    div[data-testid="column"]:has(button:not([kind])) {
+        padding-left: 4px !important;
     }
 
     div[data-testid="stMetricValue"] {
@@ -666,11 +682,11 @@ with st.sidebar:
         tracker_host = "localhost"
         tracker_port = 8765
 
-    col1, col2 = st.columns(2)
+    col1, col2 = st.columns([1, 1], gap="small")
     with col1:
-        deploy_btn = st.button("Deploy HoneyTokens", type="primary", width="stretch")
+        deploy_btn = st.button("Deploy Decoys", type="primary", width="stretch")
     with col2:
-        if st.button("Clear Alerts", width="stretch"):
+        if st.button("Clear Log", width="stretch"):
             open(ALERTS_LOG, "w").close()
             _db_clear()
             st.session_state.accessed_files = set()
@@ -766,7 +782,7 @@ if os.path.exists(manifest_path):
         with col_left:
             graph_placeholder.info(
                 "No honeytokens deployed yet. "
-                "Configure and click **Deploy HoneyTokens** in the sidebar.",
+                "Configure and click **Deploy Decoys** in the sidebar.",
             )
 
 # ── Live panels (alerts + metrics + log — text only, no graph redraw) ─
