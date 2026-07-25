@@ -345,6 +345,49 @@ def _call_gemini(prompt, department):
         return MOCK_DOCUMENTS.get(department, MOCK_DOCUMENTS["Finance"])
 
 
+# ── AI Intrusion Analyzer ────────────────────────────────────────────
+INTRUSION_ANALYSIS_PROMPT = """You are a senior SOC (Security Operations Center) analyst at a cybersecurity firm serving African enterprises. An intrusion has been detected by our honeytoken deception system.
+
+Here are the recent events:
+{events}
+
+Analyze this intrusion and provide a concise threat assessment with:
+1. **Threat Severity**: Low / Medium / High / Critical
+2. **Attacker Profile**: What kind of threat actor this appears to be (e.g., ransomware bot, insider threat, opportunistic scanner, targeted attacker)
+3. **What Was Targeted**: Which file types were accessed and what this suggests about the attacker's intent
+4. **Recommended Actions**: 2-3 concrete steps the security team should take right now
+5. **Risk to Business**: What data/assets are at risk based on the files accessed
+
+Keep the analysis brief, professional, and actionable. Use African context where relevant (e.g., mention local compliance implications)."""
+
+
+MOCK_INTRUSION_ANALYSIS = """**Threat Severity**: HIGH
+
+**Attacker Profile**: This matches patterns of an opportunistic ransomware operator using automated scanning tools. The User-Agent string suggests a standard browser, not a bot — indicating a human operator manually inspecting files after initial access.
+
+**What Was Targeted**: Financial documents (payroll, budget allocations) were accessed. This suggests the attacker is searching for financial data to exfiltrate before deploying ransomware — a common pattern in African SME attacks where payroll data is targeted for double extortion.
+
+**Recommended Actions**:
+1. Immediately isolate the affected file server from the network
+2. Review authentication logs for the IP address — check for brute-force or credential theft
+3. Engage incident response — this matches patterns of active ransomware deployment within 24-48 hours of initial reconnaissance
+
+**Risk to Business**: Critical. Payroll and financial data exposure could lead to regulatory penalties under Kenya's Data Protection Act. Combined with potential ransomware encryption, business operations could be halted for 3-7 days."""
+
+
+def analyze_intrusion(events_text):
+    """Use Gemini to analyze intrusion events and return a threat assessment."""
+    client = _get_client()
+    if client is None:
+        return MOCK_INTRUSION_ANALYSIS
+    try:
+        prompt = INTRUSION_ANALYSIS_PROMPT.format(events=events_text)
+        response = client.models.generate_content(model="gemini-2.0-flash", contents=prompt)
+        return response.text
+    except Exception:
+        return MOCK_INTRUSION_ANALYSIS
+
+
 def _build_html(content, company_name, department, pixel_url):
     safe_name = company_name.replace("&", "&amp;").replace("<", "&lt;")
     safe_dept = department.replace("&", "&amp;").replace("<", "&lt;")

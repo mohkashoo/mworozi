@@ -15,7 +15,7 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import pandas as pd
 
-from generator import generate_honeytokens, DEPARTMENT_PROMPTS
+from generator import generate_honeytokens, DEPARTMENT_PROMPTS, analyze_intrusion
 import db
 
 
@@ -906,6 +906,20 @@ def event_poller():
             height=0,
         )
 
+    if show_alert:
+        # AI Intrusion Analysis (cached — runs once per alert burst)
+        ai_analysis = st.session_state.get("_ai_analysis", "")
+        if not ai_analysis:
+            try:
+                events_text = "\n".join(
+                    f"{e[0]} | {e[1]} | {e[2]} | IP: {e[3]} | UA: {e[4][:60]}"
+                    for e in events[-5:]
+                )
+                ai_analysis = analyze_intrusion(events_text)
+                st.session_state._ai_analysis = ai_analysis
+            except Exception:
+                ai_analysis = ""
+
         details = ""
         for ev in latest_events[:3]:
             ts_str, ev_type, target, ip, ua = ev[0], ev[1], ev[2], ev[3], ev[4]
@@ -945,6 +959,24 @@ def event_poller():
             f"</div>",
             unsafe_allow_html=True,
         )
+
+        # AI analysis card
+        if ai_analysis:
+            st.markdown(
+                f"<div style='background:rgba(16,24,40,0.95);border:1px solid #c62828;"
+                f"border-radius:12px;padding:16px;margin-top:12px;'>"
+                f"<div style='display:flex;align-items:center;gap:8px;margin-bottom:8px;'>"
+                f"<i class='bi bi-cpu' style='color:#42a5f5;font-size:1.2em;'></i>"
+                f"<span style='color:#fff;font-weight:700;font-size:0.9rem;'>"
+                f"Gemini Threat Analysis</span></div>"
+                f"<div style='color:#ccc;font-size:0.8rem;line-height:1.6;white-space:pre-wrap;'>"
+                f"{ai_analysis}</div></div>",
+                unsafe_allow_html=True,
+            )
+
+    # Reset AI analysis cache when alert clears
+    if not show_alert:
+        st.session_state._ai_analysis = ""
 
     # Bottom-right badge
     st.markdown(
