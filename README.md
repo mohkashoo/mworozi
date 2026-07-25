@@ -237,40 +237,48 @@ Project_Ember/
 | Sound on laptop speakers (not headphones) | ⚠️ Check |
 | Browser notification permission = Allow | ✅ First load prompts |
 
-### Tunneling for Judges (Two Tunnels Required)
+### Connecting Judges to Your Demo
 
-**Important:** Localtunnel shows a warning page that blocks tracking pixels. Use **serveo.net** (no install, SSH-based, no warning) or **ngrok** instead.
+#### Option 1: Same WiFi (simplest — works at most venues)
+
+If judges are on the same network as your laptop:
 
 ```bash
-# Terminal 1 — full stack (dashboard + tracking + watchdog):
+# Find your laptop's LAN IP:
+ip addr show | grep "inet " | grep -v 127.0.0.1
+# → 192.168.1.79
+
+# Terminal 1:
 python3 run.py
-
-# Terminal 2 — expose the dashboard (use one of these):
-npx localtunnel --port 8501
-# OR:
-ssh -R 80:localhost:8501 serveo.net  # → https://8501.serveo.net
-
-# Terminal 3 — expose the tracking server (use one of these):
-ssh -R 80:localhost:8765 serveo.net  # → https://8765.serveo.net
-# OR:
-ngrok http 8765  # → https://xxxx.ngrok.io
 ```
 
-**Why not localtunnel for tracking?** Localtunnel shows a "confirm your IP" page for browser user-agents. The tracking pixel (`<img>` tag) sends a browser User-Agent, hits that page, and never reaches your server. Serveo.net passes all requests through raw — no warnings.
+Then paste `http://192.168.1.79:8501` into judges' browsers for the dashboard, and set **"Tracking Server Public URL"** to `http://192.168.1.79:8765` before deploying.
 
-**After getting both tunnel URLs:**
+#### Option 2: Public Tunnel (for remote/isolated networks)
 
-1. Copy the tracking tunnel URL (e.g., `https://8765.serveo.net`) 
-2. Paste it into the **"Tracking Server Public URL"** field in the sidebar
-3. Click **Deploy** — all new honeytokens will have tracking pixels pointing to the public URL
-4. Judges can open the `.html` files on their own laptops and the beacon will reach your tracking server
+Use **`bore`** — a minimal TCP tunnel with zero warning pages (Localtunnel, Serveo, and ngrok all show interstitials that block tracking pixels).
 
-**Verify the beacon works cross-machine:**
+```bash
+# Install bore: https://github.com/ekzhang/bore/releases
+
+# Terminal 1 — full stack:
+python3 run.py
+
+# Terminal 2 — expose the dashboard:
+bore local 8501 --to bore.pub
+
+# Terminal 3 — expose the tracking server:
+bore local 8765 --to bore.pub
+```
+
+Set **"Tracking Server Public URL"** to `http://bore.pub:[TRACKING_PORT]`.
+
+#### Verify Cross-Machine:
 
 ```bash
 # From any laptop on any network:
-curl "https://8765.serveo.net/track?file=judge_demo"
-# → Dashboard alert fires within 1 second + Slack notification
+curl "http://YOUR_IP_OR_TUNNEL:8765/track?file=judge_demo"
+# → Dashboard alert + Slack on your phone
 ```
 
 Good luck. Go win.
