@@ -353,6 +353,8 @@ for key, default in [
     ("output_dir", DEFAULT_OUTPUT),
     ("last_alert_count", 0),
     ("accessed_files", set()),
+    ("slack_url", ""),
+    ("smb_path", ""),
 ]:
     if key not in st.session_state:
         st.session_state[key] = default
@@ -639,14 +641,20 @@ with st.sidebar:
     with st.expander("Notifications & Deployment", expanded=False):
         slack_url = st.text_input(
             "Slack Webhook URL",
+            value=st.session_state.slack_url,
             placeholder="https://hooks.slack.com/services/...",
             help="Paste a Slack Incoming Webhook URL to get push alerts on your phone",
+            key="slack_input",
         )
+        st.session_state.slack_url = slack_url
         smb_path = st.text_input(
             "Deploy Target Path",
+            value=st.session_state.smb_path,
             placeholder="/mnt/fileserver/shared/ or //SERVER/share",
             help="SMB/network path to auto-deploy honeytokens (optional)",
+            key="smb_input",
         )
+        st.session_state.smb_path = smb_path
     
     st.divider()
     st.markdown(
