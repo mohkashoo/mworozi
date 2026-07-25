@@ -372,6 +372,18 @@ except Exception:
 # ── Start tracking pixel HTTP server (once per session) ─────────────
 _ensure_tracking_server()
 
+# ── Browser Notification Permission ─────────────────────────────────
+st.markdown(
+    """
+<script>
+if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+}
+</script>
+""",
+    unsafe_allow_html=True,
+)
+
 # ── Helpers ───────────────────────────────────────────────────────────
 
 
@@ -863,8 +875,25 @@ def event_poller():
             )
             _send_slack(slack_url, slack_text)
 
-    # Alert banner persists for 10s after last event
+    # Browser notification (works in background tabs)
     if show_alert:
+        components.html(
+            """
+            <script>
+            if ('Notification' in window && Notification.permission === 'granted') {
+                var n = new Notification('Project Ember — Intrusion Detected', {
+                    body: 'New security event detected — click to open dashboard',
+                    icon: 'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/icons/activity.svg',
+                    tag: 'ember-alert',
+                    requireInteraction: true
+                });
+                n.onclick = function() { window.focus(); };
+            }
+            </script>
+            """,
+            height=0,
+        )
+
         details = ""
         for ev in latest_events[:3]:
             ts_str, ev_type, target, ip, ua = ev[0], ev[1], ev[2], ev[3], ev[4]
