@@ -6,3 +6,11 @@ honeytokens/manifest.json
 honeytokens/*.html
 honeytokens/*.md
 honeytokens/*.txt
+ember.db
+ember.db-shm
+ember.db-wal
+honeytokens/*.html
+honeytokens/*.md
+honeytokens/*.txt
+honeytokens/manifest.json
+honeytokens/a
