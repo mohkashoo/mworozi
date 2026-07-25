@@ -338,8 +338,11 @@ def _call_gemini(prompt, department):
     client = _get_client()
     if client is None:
         return MOCK_DOCUMENTS.get(department, MOCK_DOCUMENTS["Finance"])
-    response = client.models.generate_content(model="gemini-2.0-flash", contents=prompt)
-    return response.text
+    try:
+        response = client.models.generate_content(model="gemini-2.0-flash", contents=prompt)
+        return response.text
+    except Exception:
+        return MOCK_DOCUMENTS.get(department, MOCK_DOCUMENTS["Finance"])
 
 
 def _build_html(content, company_name, department, pixel_url):

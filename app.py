@@ -811,22 +811,9 @@ def event_poller():
         except (ValueError, IndexError):
             pass
  
-    # Sound + Slack on new events
+    # Sound on new events (fires once)
     if new_count > 0:
         st.session_state.prev_event_count = n
-
-        # Send Slack alert
-        if latest_events:
-            latest = latest_events[0]
-            slack_text = (
-                f"🚨 *Project Ember — Intrusion Detected*\n"
-                f"• *File:* `{latest[2]}`\n"
-                f"• *Type:* `{latest[1]}`\n"
-                f"• *Time:* `{latest[0]}`\n"
-                f"• *IP:* `{latest[3]}` ({geoip(latest[3])})\n"
-                f"• *Browser:* `{latest[4][:80]}`"
-            )
-            _send_slack(slack_url, slack_text)
 
         components.html(
             """
@@ -858,6 +845,23 @@ def event_poller():
             """,
             height=0,
         )
+
+    # Slack: fires for all recent events + re-sends when URL changes
+    if show_alert and slack_url:
+        last_slack = st.session_state.get("last_slack_ts", "")
+        latest_ts = events[-1][0] if events else ""
+        if latest_ts != last_slack:
+            st.session_state.last_slack_ts = latest_ts
+            latest = events[-1]
+            slack_text = (
+                f"🚨 *Project Ember — Intrusion Detected*\n"
+                f"• *File:* `{latest[2]}`\n"
+                f"• *Type:* `{latest[1]}`\n"
+                f"• *Time:* `{latest[0]}`\n"
+                f"• *IP:* `{latest[3]}` ({geoip(latest[3])})\n"
+                f"• *Browser:* `{latest[4][:80]}`"
+            )
+            _send_slack(slack_url, slack_text)
 
     # Alert banner persists for 10s after last event
     if show_alert:
