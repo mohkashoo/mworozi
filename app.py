@@ -159,6 +159,8 @@ GEOIP_DB = {
 def geoip(ip: str) -> str:
     if not ip:
         return "📍 Unknown"
+    if ip in ("127.0.0.1", "::1", "localhost"):
+        return "🇷🇼 Kigali, Rwanda (Local Simulation)"
     for prefix, (city, country, flag) in GEOIP_DB.items():
         if ip.startswith(prefix):
             return f"{flag} {city}, {country}"
@@ -623,29 +625,24 @@ with st.sidebar:
     )
     st.session_state.output_dir = output_dir
 
-    tracker_port = st.number_input(
-        "Tracking Pixel Port",
-        min_value=1024,
-        max_value=65535,
-        value=TRACKING_PORT,
-        step=1,
-        help="Port for the hidden tracking-pixel HTTP server. Must match the port in generated files.",
+    _cfg = _load_config()
+    tracker_base_url = st.text_input(
+        "Tracking Server Public URL",
+        value=_cfg.get("tracker_base_url", "http://localhost:8765"),
+        placeholder="http://localhost:8765 or https://track.loca.lt",
+        help="Public URL of the tracking server for pixel beacons. Use localhost for local testing, or the localtunnel URL for judges to test from their own laptops.",
     )
+    _save_config("tracker_base_url", tracker_base_url)
+    st.caption(f"Pixel: `{tracker_base_url}/track?file=FILENAME`")
 
-    api_key_set = bool(os.environ.get("GEMINI_API_KEY"))
-    if api_key_set:
-        st.success("GEMINI_API_KEY detected", icon="🔑")
-    else:
-            st.warning(
-                "GEMINI_API_KEY not set — using mock output. "
-                "Set the environment variable for AI-generated content.",
-            )
-
-    # Tracking URL display
-    st.caption(
-        f"Tracking pixel base URL:\n"
-        f"`http://localhost:{tracker_port}/track?file=FILENAME`"
-    )
+    # Parse the base URL for the generator
+    try:
+        parsed_url = urlparse(tracker_base_url)
+        tracker_host = parsed_url.hostname or "localhost"
+        tracker_port = parsed_url.port or 8765
+    except Exception:
+        tracker_host = "localhost"
+        tracker_port = 8765
 
     col1, col2 = st.columns(2)
     with col1:
@@ -658,7 +655,6 @@ with st.sidebar:
             st.rerun()
 
     with st.expander("Notifications & Deployment", expanded=False):
-        _cfg = _load_config()
         slack_url = st.text_input(
             "Slack Webhook URL",
             value=_cfg.get("slack_url", ""),
@@ -692,6 +688,7 @@ if deploy_btn:
                 company_name=company_name,
                 department=selected_dept,
                 output_dir=output_dir,
+                tracker_host=tracker_host,
                 tracker_port=tracker_port,
             )
             st.session_state.deployed = True

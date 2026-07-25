@@ -237,14 +237,34 @@ Project_Ember/
 | Sound on laptop speakers (not headphones) | ⚠️ Check |
 | Browser notification permission = Allow | ✅ First load prompts |
 
-### Tunneling for Judges
+### Tunneling for Judges (Two Tunnels Required)
 
 ```bash
-# Terminal 1 — full stack:
+# Terminal 1 — full stack (dashboard + tracking + watchdog):
 python3 run.py
 
-# Terminal 2 — public URL:
+# Terminal 2 — expose the dashboard:
 npx localtunnel --port 8501
+# → https://some-name.loca.lt
+
+# Terminal 3 — expose the tracking server (for judges' own laptops):
+npx localtunnel --port 8765
+# → https://other-name.loca.lt
+```
+
+**After getting both tunnel URLs:**
+
+1. Copy the tracking tunnel URL (e.g., `https://other-name.loca.lt`) 
+2. Paste it into the **"Tracking Server Public URL"** field in the sidebar
+3. Click **Deploy** — all new honeytokens will have tracking pixels pointing to the public URL
+4. Judges can open the `.html` files on their own laptops and the beacon will reach your tracking server
+
+**Verify the beacon works cross-machine:**
+
+```bash
+# From any laptop on any network:
+curl "https://other-name.loca.lt/track?file=judge_demo"
+# → Dashboard alert fires within 1 second + Slack notification
 ```
 
 Good luck. Go win.
