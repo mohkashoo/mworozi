@@ -102,6 +102,27 @@ def _send_slack(webhook_url, text):
 ALERTS_LOG = os.environ.get("EMBER_ALERTS_LOG", "alerts.log")
 TRACKING_PORT = int(os.environ.get("EMBER_TRACKING_PORT", "8765"))
 DEFAULT_OUTPUT = os.environ.get("EMBER_OUTPUT_DIR", "./honeytokens")
+CONFIG_PATH = os.environ.get("EMBER_CONFIG", "ember_config.json")
+
+
+def _load_config():
+    try:
+        if os.path.exists(CONFIG_PATH):
+            with open(CONFIG_PATH) as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {}
+
+
+def _save_config(key, value):
+    try:
+        cfg = _load_config()
+        cfg[key] = value
+        with open(CONFIG_PATH, "w") as f:
+            json.dump(cfg, f)
+    except Exception:
+        pass
 
 # ── Local GeoIP dictionary (fully offline, no network calls) ────────
 GEOIP_DB = {
@@ -353,8 +374,6 @@ for key, default in [
     ("output_dir", DEFAULT_OUTPUT),
     ("last_alert_count", 0),
     ("accessed_files", set()),
-    ("slack_url", ""),
-    ("smb_path", ""),
 ]:
     if key not in st.session_state:
         st.session_state[key] = default
@@ -639,22 +658,21 @@ with st.sidebar:
             st.rerun()
 
     with st.expander("Notifications & Deployment", expanded=False):
+        _cfg = _load_config()
         slack_url = st.text_input(
             "Slack Webhook URL",
-            value=st.session_state.slack_url,
+            value=_cfg.get("slack_url", ""),
             placeholder="https://hooks.slack.com/services/...",
             help="Paste a Slack Incoming Webhook URL to get push alerts on your phone",
-            key="slack_input",
         )
-        st.session_state.slack_url = slack_url
+        _save_config("slack_url", slack_url)
         smb_path = st.text_input(
             "Deploy Target Path",
-            value=st.session_state.smb_path,
+            value=_cfg.get("smb_path", ""),
             placeholder="/mnt/fileserver/shared/ or //SERVER/share",
             help="SMB/network path to auto-deploy honeytokens (optional)",
-            key="smb_input",
         )
-        st.session_state.smb_path = smb_path
+        _save_config("smb_path", smb_path)
     
     st.divider()
     st.markdown(
