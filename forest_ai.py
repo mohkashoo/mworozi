@@ -52,6 +52,20 @@ def _get_client():
     return genai.Client(api_key=GEMINI_API_KEY)
 
 
+MODEL = os.environ.get("EMBER_MODEL", "gemini-2.0-flash")
+
+
+def _call_gemini(contents):
+    client = _get_client()
+    if client is None:
+        return None
+    try:
+        response = client.models.generate_content(model=MODEL, contents=contents)
+        return response.text
+    except Exception as e:
+        return f"__ERROR__:{e}"
+
+
 MOCK_TREE_ANALYSIS = """**Species**: Likely *Grevillea robusta* (Silver Oak)
 
 **Health Score**: 34/100
@@ -73,78 +87,37 @@ MOCK_TREE_ANALYSIS = """**Species**: Likely *Grevillea robusta* (Silver Oak)
 
 **Risk to Nearby Trees**: High — root rot can spread through soil contact. Isolate area."""
 
-MOCK_AUDIO_ANALYSIS = """**Biodiversity Index**: 72/100
-
-**Bird Species Detected**: At least 4 distinct calls detected
-
-**Insect Activity**: High — healthy insect population present
-
-**Threats Detected**: No chainsaw or vehicle noise detected. Light wind rustling only.
-
-**Alert Needed**: NO
-
-**Forest Health Assessment**: Healthy forest ecosystem. Bird diversity indicates good habitat quality.
-
-**Recommendation**: Continue monitoring. Consider periodic audio surveys to track biodiversity changes."""
-
-MOCK_REFORESTATION = """**Recommended Species**:
-1. *Prunus africana* (African cherry) — timber + medicine
-2. *Grevillea robusta* — fast-growing shade tree
-3. *Markhamia lutea* — nitrogen-fixing, bee forage
-4. *Persea americana* (avocado) — food + income
-5. *Calliandra calothyrsus* — living fence + fodder
-
-**5-Year Growth Forecast**:
-- Year 1: 1-2m height, 10% canopy
-- Year 3: 4-6m height, 30% canopy
-- Year 5: 8-12m height, 60% canopy, first timber harvest possible for Grevillea
-
-**Carbon Sequestration**: ~400kg CO2 per tree over 5 years (2,000kg total for 5 trees)
-
-**Monthly Care Calendar**: 
-- Month 1-3: Water weekly, apply mulch
-- Month 4-6: Weed monthly, check for pests
-- Month 7-12: Reduce watering, stake if needed"""
-
 
 def analyze_tree_image(image_bytes):
-    client = _get_client()
-    if client is None:
-        return MOCK_TREE_ANALYSIS
-    try:
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=[TREE_HEALTH_PROMPT, image_bytes],
-        )
-        return response.text
-    except Exception:
-        return MOCK_TREE_ANALYSIS
+    result = _call_gemini([TREE_HEALTH_PROMPT, image_bytes])
+    if result is None:
+        return MOCK_TREE_ANALYSIS, False
+    if result.startswith("__ERROR__"):
+        return f"⚠️ Gemini API Error: {result[9:]}\n\n---\n\n{MOCK_TREE_ANALYSIS}", True
+    return result, True
 
 
-def analyze_forest_audio(audio_bytes):
+def analyze_forest_audio(audio_bytes, filename="audio.wav"):
     client = _get_client()
     if client is None:
-        return MOCK_AUDIO_ANALYSIS
+        return MOCK_AUDIO_ANALYSIS, False
     try:
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=[FOREST_AUDIO_PROMPT, audio_bytes],
-        )
-        return response.text
-    except Exception:
-        return MOCK_AUDIO_ANALYSIS
+        uploaded = client.files.upload(file=audio_bytes, config=dict(display_name=filename))
+        result = _call_gemini([FOREST_AUDIO_PROMPT, uploaded])
+        if result is None:
+            return MOCK_AUDIO_ANALYSIS, False
+        if result.startswith("__ERROR__"):
+            return f"⚠️ Gemini API Error: {result[9:]}\n\n---\n\n{MOCK_AUDIO_ANALYSIS}", True
+        return result, True
+    except Exception as e:
+        return f"⚠️ Audio upload error: {e}\n\n---\n\n{MOCK_AUDIO_ANALYSIS}", True
 
 
 def generate_reforestation_plan(description):
-    client = _get_client()
-    if client is None:
-        return MOCK_REFORESTATION
-    try:
-        prompt = REFORESTATION_PROMPT.format(description=description)
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=prompt,
-        )
-        return response.text
-    except Exception:
-        return MOCK_REFORESTATION
+    prompt = REFORESTATION_PROMPT.format(description=description)
+    result = _call_gemini([prompt])
+    if result is None:
+        return MOCK_REFORESTATION, False
+    if result.startswith("__ERROR__"):
+        return f"⚠️ Gemini API Error: {result[9:]}\n\n---\n\n{MOCK_REFORESTATION}", True
+    return result, True

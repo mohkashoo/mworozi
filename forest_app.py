@@ -162,7 +162,7 @@ with col_left:
         if uploaded_file and st.button("Analyze Tree Health", type="primary", use_container_width=True):
             with st.spinner("Gemini is analyzing the tree..."):
                 image_bytes = uploaded_file.getvalue()
-                result = analyze_tree_image(image_bytes)
+                result, is_real = analyze_tree_image(image_bytes)
                 st.session_state.tree_result = result
 
         if st.session_state.tree_result:
@@ -181,7 +181,7 @@ with col_left:
         if audio_file and st.button("Analyze Forest Sounds", type="primary", use_container_width=True):
             with st.spinner("Gemini is listening to the forest..."):
                 audio_bytes = audio_file.getvalue()
-                result = analyze_forest_audio(audio_bytes)
+                result, is_real = analyze_forest_audio(audio_bytes)
                 st.session_state.audio_result = result
                 if "chainsaw" in result.lower() or "alert needed: yes" in result.lower():
                     st.session_state.audio_alert = True
@@ -213,7 +213,7 @@ with col_left:
         land_desc = st.text_area("Land description", placeholder="Describe your land in detail...", height=150)
         if land_desc and st.button("Generate Reforestation Plan", type="primary", use_container_width=True):
             with st.spinner("Gemini is creating your reforestation plan..."):
-                result = generate_reforestation_plan(land_desc)
+                result, is_real = generate_reforestation_plan(land_desc)
                 st.session_state.reforest_result = result
 
         if st.session_state.reforest_result:
