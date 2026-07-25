@@ -258,36 +258,43 @@ st.markdown(
     h3 { color: #ffffff !important; font-size: 1rem !important; text-transform: uppercase; letter-spacing: 2px; }
 
     .stButton button {
-        background: linear-gradient(135deg, #1a237e, #283593) !important;
-        color: #ffffff !important;
-        border: 1px solid rgba(255,255,255,0.15) !important;
-        border-radius: 10px !important;
-        font-weight: 600 !important;
-        font-size: 0.85rem !important;
-        letter-spacing: 0.5px !important;
-        padding: 6px 16px !important;
-        height: 38px !important;
+        background: #1e293b !important;
+        color: #e2e8f0 !important;
+        border: 1px solid #334155 !important;
+        border-radius: 6px !important;
+        font-weight: 500 !important;
+        font-size: 0.8rem !important;
+        padding: 4px 14px !important;
+        height: 32px !important;
         line-height: 1 !important;
-        transition: all 0.25s ease !important;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.2) !important;
+        cursor: pointer !important;
+        transition: background 0.15s ease, border-color 0.15s ease !important;
+        box-shadow: none !important;
     }
     .stButton button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(26,35,126,0.35) !important;
-        border-color: rgba(255,255,255,0.3) !important;
+        background: #334155 !important;
+        border-color: #475569 !important;
+        transform: none !important;
+        box-shadow: none !important;
     }
     .stButton button:active {
-        transform: translateY(0);
-        box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;
+        background: #475569 !important;
+        transform: none !important;
     }
     button[kind="primary"] {
-        background: linear-gradient(135deg, #c62828, #e53935) !important;
-        border: 1px solid rgba(255,255,255,0.25) !important;
+        background: #dc2626 !important;
+        border-color: #b91c1c !important;
         font-weight: 600 !important;
+        color: #ffffff !important;
     }
     button[kind="primary"]:hover {
-        box-shadow: 0 6px 24px rgba(198,40,40,0.4) !important;
-        border-color: rgba(255,255,255,0.4) !important;
+        background: #ef4444 !important;
+        border-color: #dc2626 !important;
+        box-shadow: none !important;
+        transform: none !important;
+    }
+    button[kind="primary"]:active {
+        background: #b91c1c !important;
     }
     .stButton {
         width: 100% !important;
