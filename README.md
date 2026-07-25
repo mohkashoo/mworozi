@@ -239,22 +239,28 @@ Project_Ember/
 
 ### Tunneling for Judges (Two Tunnels Required)
 
+**Important:** Localtunnel shows a warning page that blocks tracking pixels. Use **serveo.net** (no install, SSH-based, no warning) or **ngrok** instead.
+
 ```bash
 # Terminal 1 — full stack (dashboard + tracking + watchdog):
 python3 run.py
 
-# Terminal 2 — expose the dashboard:
+# Terminal 2 — expose the dashboard (use one of these):
 npx localtunnel --port 8501
-# → https://some-name.loca.lt
+# OR:
+ssh -R 80:localhost:8501 serveo.net  # → https://8501.serveo.net
 
-# Terminal 3 — expose the tracking server (for judges' own laptops):
-npx localtunnel --port 8765
-# → https://other-name.loca.lt
+# Terminal 3 — expose the tracking server (use one of these):
+ssh -R 80:localhost:8765 serveo.net  # → https://8765.serveo.net
+# OR:
+ngrok http 8765  # → https://xxxx.ngrok.io
 ```
+
+**Why not localtunnel for tracking?** Localtunnel shows a "confirm your IP" page for browser user-agents. The tracking pixel (`<img>` tag) sends a browser User-Agent, hits that page, and never reaches your server. Serveo.net passes all requests through raw — no warnings.
 
 **After getting both tunnel URLs:**
 
-1. Copy the tracking tunnel URL (e.g., `https://other-name.loca.lt`) 
+1. Copy the tracking tunnel URL (e.g., `https://8765.serveo.net`) 
 2. Paste it into the **"Tracking Server Public URL"** field in the sidebar
 3. Click **Deploy** — all new honeytokens will have tracking pixels pointing to the public URL
 4. Judges can open the `.html` files on their own laptops and the beacon will reach your tracking server
@@ -263,7 +269,7 @@ npx localtunnel --port 8765
 
 ```bash
 # From any laptop on any network:
-curl "https://other-name.loca.lt/track?file=judge_demo"
+curl "https://8765.serveo.net/track?file=judge_demo"
 # → Dashboard alert fires within 1 second + Slack notification
 ```
 
