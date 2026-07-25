@@ -113,6 +113,7 @@ def main():
         str(Path(__file__).parent / "app.py"),
         "--server.headless", "true",
         "--server.port", str(STREAMLIT_PORT),
+        "--server.address", "0.0.0.0",
     ]
     streamlit_proc = subprocess.Popen(
         streamlit_args, stdout=sys.stdout, stderr=sys.stderr, env=EMBERT_ENV,

@@ -635,6 +635,21 @@ with st.sidebar:
     _save_config("tracker_base_url", tracker_base_url)
     st.caption(f"Pixel: `{tracker_base_url}/track?file=FILENAME`")
 
+    # Auto-detect LAN IP for sidebar help
+    import socket as _socket
+    try:
+        _s = _socket.socket(_socket.AF_INET, _socket.SOCK_DGRAM)
+        _s.connect(("8.8.8.8", 80))
+        _lan_ip = _s.getsockname()[0]
+        _s.close()
+        st.caption(
+            f"🌐 LAN IP: `{_lan_ip}` — use this for same-network demo. "
+            f"Dashboard: `http://{_lan_ip}:8501` | "
+            f"Tracking: `http://{_lan_ip}:8765`"
+        )
+    except Exception:
+        pass
+
     # Parse the base URL for the generator
     try:
         parsed_url = urlparse(tracker_base_url)
