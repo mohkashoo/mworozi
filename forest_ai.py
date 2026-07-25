@@ -87,6 +87,39 @@ MOCK_TREE_ANALYSIS = """**Species**: Likely *Grevillea robusta* (Silver Oak)
 
 **Risk to Nearby Trees**: High — root rot can spread through soil contact. Isolate area."""
 
+MOCK_AUDIO_ANALYSIS = """**Biodiversity Index**: 72/100
+
+**Bird Species Detected**: At least 4 distinct calls detected
+
+**Insect Activity**: High — healthy insect population present
+
+**Threats Detected**: No chainsaw or vehicle noise detected.
+
+**Alert Needed**: NO
+
+**Forest Health Assessment**: Healthy forest ecosystem.
+
+**Recommendation**: Continue monitoring."""
+
+MOCK_REFORESTATION = """**Recommended Species**:
+1. *Prunus africana* (African cherry) — timber + medicine
+2. *Grevillea robusta* — fast-growing shade tree
+3. *Markhamia lutea* — nitrogen-fixing, bee forage
+4. *Persea americana* (avocado) — food + income
+5. *Calliandra calothyrsus* — living fence + fodder
+
+**5-Year Growth Forecast**:
+- Year 1: 1-2m height
+- Year 3: 4-6m height, 30% canopy
+- Year 5: 8-12m height, 60% canopy
+
+**Carbon Sequestration**: ~400kg CO2 per tree over 5 years
+
+**Monthly Care Calendar**: 
+- Month 1-3: Water weekly, apply mulch
+- Month 4-6: Weed monthly, check for pests
+- Month 7-12: Reduce watering, stake if needed"""
+
 
 def analyze_tree_image(image_bytes):
     result = _call_gemini([TREE_HEALTH_PROMPT, image_bytes])
