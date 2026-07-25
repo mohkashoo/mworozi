@@ -2,7 +2,6 @@ import os
 import time
 import json
 import math
-import sqlite3
 import threading
 import urllib.request
 from datetime import datetime
@@ -17,66 +16,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 from generator import generate_honeytokens, DEPARTMENT_PROMPTS
-
-# ── SQLite Database (production persistence layer) ──────────────────
-DB_PATH = os.environ.get("EMBER_DB", "ember.db")
-_db_lock = threading.Lock()
-
-
-def _init_db():
-    with _db_lock:
-        conn = sqlite3.connect(DB_PATH, timeout=30.0, check_same_thread=False)
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA busy_timeout=30000")
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS events ("
-            "id INTEGER PRIMARY KEY AUTOINCREMENT,"
-            "timestamp TEXT NOT NULL,"
-            "type TEXT NOT NULL,"
-            "target TEXT,"
-            "ip TEXT DEFAULT '',"
-            "ua TEXT DEFAULT ''"
-            ")"
-        )
-        conn.commit()
-    return conn
-
-
-_db_conn = _init_db()
-
-
-def _db_insert(ts, ev_type, target, ip="", ua=""):
-    with _db_lock:
-        _db_conn.execute(
-            "INSERT INTO events (timestamp, type, target, ip, ua) VALUES (?, ?, ?, ?, ?)",
-            (ts, ev_type, target, ip, ua),
-        )
-        _db_conn.commit()
-
-
-def _db_query(limit=100):
-    with _db_lock:
-        rows = _db_conn.execute(
-            "SELECT timestamp, type, target, ip, ua FROM events ORDER BY id DESC LIMIT ?",
-            (limit,),
-        ).fetchall()
-    return [(r[0], r[1], r[2], r[3], r[4]) for r in rows]
-
-
-def _db_count():
-    with _db_lock:
-        return _db_conn.execute("SELECT COUNT(*) FROM events").fetchone()[0]
-
-
-def _db_count_by_type(ev_type):
-    with _db_lock:
-        return _db_conn.execute("SELECT COUNT(*) FROM events WHERE type=?", (ev_type,)).fetchone()[0]
-
-
-def _db_clear():
-    with _db_lock:
-        _db_conn.execute("DELETE FROM events")
-        _db_conn.commit()
+import db
 
 
 # ── Async Slack Webhook (background thread, never blocks UI) ─────────
@@ -190,7 +130,7 @@ class TrackingHandler(BaseHTTPRequestHandler):
             line = f"{ts}|TRACK|{filename}|{ip}|{ua}\n"
             with open(ALERTS_LOG, "a") as f:
                 f.write(line)
-            _db_insert(ts, "TRACK", filename, ip, ua)
+            db.insert(ts, "TRACK", filename, ip, ua)
             self.send_response(200)
             self.send_header("Content-Type", "image/gif")
             self.send_header("Content-Length", str(len(PIXEL_GIF)))
@@ -415,7 +355,7 @@ try:
         ts = datetime.now().isoformat()
         with open(ALERTS_LOG, "a") as f:
             f.write(f"{ts}|TRACK|{fname}|127.0.0.1|streamlit-intercept\n")
-        _db_insert(ts, "TRACK", fname, "127.0.0.1", "streamlit-intercept")
+        db.insert(ts, "TRACK", fname, "127.0.0.1", "streamlit-intercept")
 except Exception:
     pass
 
@@ -439,7 +379,7 @@ if ('Notification' in window && Notification.permission === 'default') {
 
 def parse_alerts():
     accessed = set()
-    all_events = _db_query(500)
+    all_events = db.query(500)
     # Merge legacy alerts.log entries for backward compat
     if os.path.exists(ALERTS_LOG):
         with open(ALERTS_LOG, "r") as f:
@@ -699,7 +639,7 @@ with st.sidebar:
     with col2:
         if st.button("Clear Log", width="stretch"):
             open(ALERTS_LOG, "w").close()
-            _db_clear()
+            db.clear()
             st.session_state.accessed_files = set()
             st.rerun()
 
@@ -853,13 +793,13 @@ def render_static_panels(events):
         with mcol1:
             st.metric("Active Tokens", total_tokens)
         with mcol2:
-            st.metric("Tracking Hits", _db_count_by_type("TRACK"))
+            st.metric("Tracking Hits", db.count_by_type("TRACK"))
         with mcol3:
             st.metric("Filesystem Events",
-                _db_count_by_type("CREATED") + _db_count_by_type("MODIFIED")
-                + _db_count_by_type("DELETED") + _db_count_by_type("MOVED"))
+                db.count_by_type("CREATED") + db.count_by_type("MODIFIED")
+                + db.count_by_type("DELETED") + db.count_by_type("MOVED"))
         with mcol4:
-            st.metric("Total Events", _db_count())
+            st.metric("Total Events", db.count())
 
     with log_placeholder.container():
         with st.expander("Full Event Log", expanded=False):

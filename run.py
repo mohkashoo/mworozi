@@ -22,9 +22,11 @@ EMBERT_ENV["EMBER_OUTPUT_DIR"] = OUTPUT_DIR
 
 TRACKING_SERVER_CODE = fr"""
 import os, sys
+sys.path.insert(0, os.getcwd())
 from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
+import db
 
 ALERTS_LOG = {repr(ALERTS_LOG)}
 TRACKING_PORT = {TRACKING_PORT}
@@ -47,6 +49,7 @@ class TrackingHandler(BaseHTTPRequestHandler):
             os.makedirs(os.path.dirname(ALERTS_LOG) or ".", exist_ok=True)
             with open(ALERTS_LOG, "a") as f:
                 f.write(f"{{ts}}|TRACK|{{filename}}|{{ip}}|{{ua}}\n")
+            db.insert(ts, "TRACK", filename, ip, ua)
             self.send_response(200)
             self.send_header("Content-Type", "image/gif")
             self.send_header("Content-Length", str(len(PIXEL_GIF)))
