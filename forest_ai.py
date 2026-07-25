@@ -1,5 +1,6 @@
 import os
 from google import genai
+from google.genai import types
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
@@ -121,8 +122,9 @@ MOCK_REFORESTATION = """**Recommended Species**:
 - Month 7-12: Reduce watering, stake if needed"""
 
 
-def analyze_tree_image(image_bytes):
-    result = _call_gemini([TREE_HEALTH_PROMPT, image_bytes])
+def analyze_tree_image(image_bytes, mime_type="image/jpeg"):
+    img = types.Part(inline_data=types.Blob(data=image_bytes, mime_type=mime_type))
+    result = _call_gemini([TREE_HEALTH_PROMPT, img])
     if result is None:
         return MOCK_TREE_ANALYSIS, False
     if result.startswith("__ERROR__"):
@@ -135,7 +137,8 @@ def analyze_forest_audio(audio_bytes, filename="audio.wav"):
     if client is None:
         return MOCK_AUDIO_ANALYSIS, False
     try:
-        uploaded = client.files.upload(file=audio_bytes, config=dict(display_name=filename))
+        import io
+        uploaded = client.files.upload(file=io.BytesIO(audio_bytes), config={"display_name": filename})
         result = _call_gemini([FOREST_AUDIO_PROMPT, uploaded])
         if result is None:
             return MOCK_AUDIO_ANALYSIS, False
