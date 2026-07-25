@@ -14,3 +14,4 @@ honeytokens/*.md
 honeytokens/*.txt
 honeytokens/manifest.json
 honeytokens/a
+ember_config.json
