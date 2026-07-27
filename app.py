@@ -1,998 +1,849 @@
-import os
-import time
-import json
-import math
-import threading
-import urllib.request
-from datetime import datetime
-from pathlib import Path
-from http.server import HTTPServer, BaseHTTPRequestHandler
-from urllib.parse import urlparse, parse_qs
+import os, sqlite3, time, json, textwrap, datetime as dt
+import warnings
+warnings.filterwarnings("ignore")
 
-import streamlit as st
-import streamlit.components.v1 as components
-import networkx as nx
-import matplotlib.pyplot as plt
-import pandas as pd
-
-from generator import generate_honeytokens, DEPARTMENT_PROMPTS, analyze_intrusion
-import db
-
-
-# ── Async Slack Webhook (background thread, never blocks UI) ─────────
-def _send_slack(webhook_url, text):
-    if not webhook_url:
-        return
-
-    def _fire():
-        try:
-            payload = json.dumps({"text": text}).encode()
-            req = urllib.request.Request(
-                webhook_url, data=payload,
-                headers={"Content-Type": "application/json"},
-            )
-            urllib.request.urlopen(req, timeout=5)
-        except Exception:
-            pass
-
-    threading.Thread(target=_fire, daemon=True).start()
-
-
-# ── Config ─────────────────────────────────────────────────────────────
-ALERTS_LOG = os.environ.get("EMBER_ALERTS_LOG", "alerts.log")
-TRACKING_PORT = int(os.environ.get("EMBER_TRACKING_PORT", "8765"))
-DEFAULT_OUTPUT = os.environ.get("EMBER_OUTPUT_DIR", "./honeytokens")
-CONFIG_PATH = os.environ.get("EMBER_CONFIG", "ember_config.json")
-
-
-def _load_config():
-    try:
-        if os.path.exists(CONFIG_PATH):
-            with open(CONFIG_PATH) as f:
-                return json.load(f)
-    except Exception:
-        pass
-    return {}
-
-
-def _save_config(key, value):
-    try:
-        cfg = _load_config()
-        cfg[key] = value
-        with open(CONFIG_PATH, "w") as f:
-            json.dump(cfg, f)
-    except Exception:
-        pass
-
-# ── Local GeoIP dictionary (fully offline, no network calls) ────────
-GEOIP_DB = {
-    "127.0.0.1": ("Kigali", "Rwanda", "🇷🇼"),
-    "::1": ("Kigali", "Rwanda", "🇷🇼"),
-    "localhost": ("Kigali", "Rwanda", "🇷🇼"),
-    "192.168.": ("Nairobi", "Kenya", "🇰🇪"),
-    "10.": ("Lagos", "Nigeria", "🇳🇬"),
-    "172.16.": ("Cape Town", "South Africa", "🇿🇦"),
-    "172.17.": ("Cape Town", "South Africa", "🇿🇦"),
-    "172.18.": ("Cape Town", "South Africa", "🇿🇦"),
-    "172.19.": ("Cape Town", "South Africa", "🇿🇦"),
-    "172.20.": ("Cape Town", "South Africa", "🇿🇦"),
-    "172.21.": ("Cape Town", "South Africa", "🇿🇦"),
-    "172.22.": ("Cape Town", "South Africa", "🇿🇦"),
-    "172.23.": ("Cape Town", "South Africa", "🇿🇦"),
-    "172.24.": ("Cape Town", "South Africa", "🇿🇦"),
-    "172.25.": ("Cape Town", "South Africa", "🇿🇦"),
-    "172.26.": ("Cape Town", "South Africa", "🇿🇦"),
-    "172.27.": ("Cape Town", "South Africa", "🇿🇦"),
-    "172.28.": ("Cape Town", "South Africa", "🇿🇦"),
-    "172.29.": ("Cape Town", "South Africa", "🇿🇦"),
-    "172.30.": ("Cape Town", "South Africa", "🇿🇦"),
-    "172.31.": ("Cape Town", "South Africa", "🇿🇦"),
-    "41.": ("Nairobi", "Kenya", "🇰🇪"),
-    "102.": ("Johannesburg", "South Africa", "🇿🇦"),
-    "105.": ("Casablanca", "Morocco", "🇲🇦"),
-    "154.": ("Accra", "Ghana", "🇬🇭"),
-    "196.": ("Cairo", "Egypt", "🇪🇬"),
-    "197.": ("Tunis", "Tunisia", "🇹🇳"),
-}
-
-
-def geoip(ip: str) -> str:
-    if not ip:
-        return "📍 Unknown"
-    if ip in ("127.0.0.1", "::1", "localhost"):
-        return "🇷🇼 Kigali, Rwanda (Local Simulation)"
-    for prefix, (city, country, flag) in GEOIP_DB.items():
-        if ip.startswith(prefix):
-            return f"{flag} {city}, {country}"
-    return f"📍 {ip}"
-if not os.path.exists(ALERTS_LOG):
-    with open(ALERTS_LOG, "w") as f:
-        f.write("")
-
-# ── Tracking pixel endpoint (lightweight HTTP server in background) ──
-PIXEL_GIF = (
-    b"GIF89a\x01\x00\x01\x00\x80\x00\x00"
-    b"\xff\xff\xff\x00\x00\x00"
-    b"!\xf9\x04\x00\x00\x00\x00\x00"
-    b",\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;"
-)
-
-
-class TrackingHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        parsed = urlparse(self.path)
-        if parsed.path.rstrip("/") == "/track":
-            params = parse_qs(parsed.query)
-            filename = params.get("file", ["unknown"])[0]
-            ts = datetime.now().isoformat()
-            ip = self.client_address[0]
-            ua = self.headers.get("User-Agent", "unknown")
-            line = f"{ts}|TRACK|{filename}|{ip}|{ua}\n"
-            with open(ALERTS_LOG, "a") as f:
-                f.write(line)
-            db.insert(ts, "TRACK", filename, ip, ua)
-            self.send_response(200)
-            self.send_header("Content-Type", "image/gif")
-            self.send_header("Content-Length", str(len(PIXEL_GIF)))
-            self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
-            self.end_headers()
-            self.wfile.write(PIXEL_GIF)
-        else:
-            self.send_response(204)
-            self.end_headers()
-
-    def log_message(self, fmt, *args):
-        pass
-
-
-_tracking_server = None
-_TRACKING_STARTED = False
-_tracking_lock = threading.Lock()
-
-
-def _start_tracking_server_once():
-    global _tracking_server, _TRACKING_STARTED
-    if _TRACKING_STARTED:
-        return
-    with _tracking_lock:
-        if _TRACKING_STARTED:
-            return
-        try:
-            _tracking_server = HTTPServer(("0.0.0.0", TRACKING_PORT), TrackingHandler)
-        except OSError:
-            _TRACKING_STARTED = True
-            return
-        t = threading.Thread(target=_tracking_server.serve_forever, daemon=True)
-        t.start()
-        _TRACKING_STARTED = True
-
-
-@st.cache_resource
-def _ensure_tracking_server():
-    _start_tracking_server_once()
-    return TRACKING_PORT
-
-
-# ── Page config ───────────────────────────────────────────────────────
-st.set_page_config(
-    page_title="Project Ember — AI HoneyToken Factory",
-    page_icon="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/icons/activity.svg",
-    layout="wide",
-    initial_sidebar_state="collapsed",
-    menu_items=None,
-)
-
-# ── Styles (High-Contrast Dark Theme — Optimized for Projectors) ────
-st.markdown(
-    """
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-<style>
-    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700;800&family=Inter:wght@500;600;700;800&display=swap');
-
-    * { font-family: 'Inter', sans-serif; }
-    .stApp { background: #0a0e17; }
-    .main > div { background: #0a0e17; }
-
-    h1, h2, h3 { font-family: 'Inter', sans-serif !important; font-weight: 800 !important; }
-    h1 { color: #ffffff !important; letter-spacing: -0.5px; font-size: 2rem !important; }
-    h3 { color: #ffffff !important; font-size: 1rem !important; text-transform: uppercase; letter-spacing: 2px; }
-
-    .stButton button {
-        background: #1e293b !important;
-        color: #e2e8f0 !important;
-        border: 1px solid #334155 !important;
-        border-radius: 6px !important;
-        font-weight: 500 !important;
-        font-size: 0.8rem !important;
-        padding: 4px 14px !important;
-        height: 32px !important;
-        line-height: 1 !important;
-        cursor: pointer !important;
-        transition: background 0.15s ease, border-color 0.15s ease !important;
-        box-shadow: none !important;
-    }
-    .stButton button:hover {
-        background: #334155 !important;
-        border-color: #475569 !important;
-        transform: none !important;
-        box-shadow: none !important;
-    }
-    .stButton button:active {
-        background: #475569 !important;
-        transform: none !important;
-    }
-    button[kind="primary"] {
-        background: #dc2626 !important;
-        border-color: #b91c1c !important;
-        font-weight: 600 !important;
-        color: #ffffff !important;
-    }
-    button[kind="primary"]:hover {
-        background: #ef4444 !important;
-        border-color: #dc2626 !important;
-        box-shadow: none !important;
-        transform: none !important;
-    }
-    button[kind="primary"]:active {
-        background: #b91c1c !important;
-    }
-    .stButton {
-        width: 100% !important;
-    }
-    div[data-testid="column"] {
-        padding: 0 2px !important;
-        flex: 1 1 50% !important;
-        min-width: 0 !important;
-    }
-
-    div[data-testid="stMetricValue"] {
-        font-family: 'JetBrains Mono', monospace !important;
-        font-size: 2.5rem !important;
-        font-weight: 800 !important;
-        color: #ffffff !important;
-    }
-    div[data-testid="stMetricLabel"] {
-        font-size: 0.8rem !important;
-        text-transform: uppercase;
-        letter-spacing: 1.5px;
-        color: #aaa !important;
-        font-weight: 600 !important;
-    }
-    div[data-testid="metric-container"] {
-        background: rgba(255,255,255,0.05);
-        border: 1px solid rgba(255,255,255,0.12);
-        border-radius: 12px;
-        padding: 16px;
-    }
-
-    .stAlert { border-left: 5px solid #f44336 !important; background: rgba(244,67,54,0.12) !important; }
-    .stAlert p { color: #ffffff !important; font-weight: 600 !important; }
-    .stInfo { border-left: 5px solid #42a5f5 !important; background: rgba(66,165,245,0.12) !important; }
-    .stInfo p { color: #ffffff !important; }
-    .stSuccess { border-left: 5px solid #66bb6a !important; background: rgba(102,187,106,0.12) !important; }
-    .stSuccess p { color: #ffffff !important; }
-    .stWarning { border-left: 5px solid #ffa726 !important; background: rgba(255,167,38,0.12) !important; }
-    .stWarning p { color: #ffffff !important; }
-
-    .stTextInput input, .stSelectbox, .stNumberInput input {
-        background: rgba(255,255,255,0.08) !important;
-        border: 2px solid rgba(255,255,255,0.15) !important;
-        border-radius: 8px !important;
-        color: #ffffff !important;
-        font-size: 1rem !important;
-    }
-    .stTextInput input:focus {
-        border-color: #42a5f5 !important;
-        box-shadow: 0 0 0 3px rgba(66,165,245,0.3) !important;
-    }
-    .stSelectbox div[data-baseweb="select"] > div {
-        border: 2px solid rgba(255,255,255,0.15) !important;
-        background: rgba(255,255,255,0.08) !important;
-    }
-
-    .st-bq { background: rgba(255,255,255,0.04) !important; border: 1px solid rgba(255,255,255,0.1) !important; border-radius: 12px !important; }
-    .stSidebar { background: #0d1117 !important; border-right: 2px solid rgba(255,255,255,0.08) !important; }
-    .stSidebar .st-bq { background: transparent !important; border: none !important; }
-    .stSidebar .stMarkdown p { color: #ccc !important; }
-
-    div[data-testid="stExpander"] {
-        background: rgba(255,255,255,0.03) !important;
-        border: 1px solid rgba(255,255,255,0.1) !important;
-        border-radius: 12px !important;
-    }
-    div[data-testid="stExpander"] summary p {
-        font-weight: 700 !important;
-        color: #ffffff !important;
-    }
-
-    .stDataFrame { background: rgba(255,255,255,0.03) !important; border-radius: 8px !important; border: 1px solid rgba(255,255,255,0.08) !important; }
-    .stDataFrame th { font-size: 0.75rem !important; text-transform: uppercase; letter-spacing: 1.5px; color: #aaa !important; font-weight: 700 !important; }
-    .stDataFrame td { font-size: 0.85rem !important; color: #ffffff !important; font-family: 'JetBrains Mono', monospace !important; font-weight: 500 !important; }
-
-    .stCode { background: rgba(255,255,255,0.05) !important; border: 1px solid rgba(255,255,255,0.1) !important; color: #ffffff !important; }
-    .stCode code { color: #ffffff !important; }
-    .stSpinner > div { border-color: #f44336 transparent transparent transparent !important; border-width: 4px !important; }
-
-    .stCaption { color: #999 !important; font-size: 0.85rem !important; }
-    hr { border-color: rgba(255,255,255,0.1) !important; border-width: 1px !important; }
-
-    div[data-testid="stNotification"] { background: #1a1a2e !important; border: 1px solid #f44336 !important; }
-    div[data-testid="stNotification"] p { color: #ffffff !important; font-weight: 600 !important; }
-
-    @keyframes flashRed {
-        0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(244,67,54,0.6); }
-        50% { opacity: 0.5; box-shadow: 0 0 30px 15px rgba(244,67,54,0.2); }
-    }
-    .flash-node { animation: flashRed 0.8s ease-in-out infinite; }
-
-    @keyframes slideDown {
-        from { transform: translateY(-100%); opacity: 0; }
-        to { transform: translateY(0); opacity: 1; }
-    }
-    .alert-banner { animation: slideDown 0.3s ease-out; }
-</style>
-""",
-    unsafe_allow_html=True,
-)
-
-# ── Session state ─────────────────────────────────────────────────────
-for key, default in [
-    ("deployed", False),
-    ("company_name", "Acme Kenya Ltd"),
-    ("industry", "Financial Services"),
-    ("output_dir", DEFAULT_OUTPUT),
-    ("last_alert_count", 0),
-    ("accessed_files", set()),
-]:
-    if key not in st.session_state:
-        st.session_state[key] = default
-
-# ── Streamlit intercept for /track requests hitting port 8501 ────────
+# Load .env file if present (so env vars work without manual export)
 try:
-    _qp = st.query_params
-    if "file" in _qp:
-        fname = _qp["file"]
-        ts = datetime.now().isoformat()
-        with open(ALERTS_LOG, "a") as f:
-            f.write(f"{ts}|TRACK|{fname}|127.0.0.1|streamlit-intercept\n")
-        db.insert(ts, "TRACK", fname, "127.0.0.1", "streamlit-intercept")
-except Exception:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
     pass
 
-# ── Start tracking pixel HTTP server (once per session) ─────────────
-_ensure_tracking_server()
+import streamlit as st
+import plotly.graph_objects as go
+import pandas as pd
+import numpy as np
 
-# ── Browser Notification Permission ─────────────────────────────────
-st.markdown(
-    """
-<script>
-if ('Notification' in window && Notification.permission === 'default') {
-    Notification.requestPermission();
-}
-</script>
-""",
-    unsafe_allow_html=True,
+from audio_processor import NeonatalAudioEngine
+
+# ---------------------------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------------------------
+DB_PATH = "humura.db"
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+HIGH_RISK_THRESHOLD = 50  # risk_score >= this triggers Tier‑2 triage
+
+# Healthy neonatal reference ranges
+HEALTHY_F0_LOW = 350
+HEALTHY_F0_HIGH = 650
+HEALTHY_TEMP_LOW = 36.5
+HEALTHY_TEMP_HIGH = 37.5
+HEALTHY_HR_LOW = 120
+HEALTHY_HR_HIGH = 160
+HEALTHY_RR_LOW = 30
+HEALTHY_RR_HIGH = 60
+
+# ---------------------------------------------------------------------------
+# Page config
+# ---------------------------------------------------------------------------
+st.set_page_config(
+    page_title="Project Humura — Neonatal Cry Triage",
+    page_icon="❤️‍🩹",
+    layout="wide",
+    initial_sidebar_state="expanded",
 )
 
-# ── Helpers ───────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# Cached resources
+# ---------------------------------------------------------------------------
+@st.cache_resource(show_spinner="Initialising acoustic engine…")
+def get_engine():
+    return NeonatalAudioEngine()
 
 
-def parse_alerts():
-    accessed = set()
-    all_events = db.query(500)
-    # Merge legacy alerts.log entries for backward compat
-    if os.path.exists(ALERTS_LOG):
-        with open(ALERTS_LOG, "r") as f:
-            for raw in f:
-                raw = raw.strip()
-                if not raw:
-                    continue
-                parts = raw.split("|", 4)
-                try:
-                    ts_str = parts[0]
-                    ev_type = parts[1]
-                    target = parts[2]
-                    ip = parts[3] if len(parts) > 3 else ""
-                    detail = parts[4] if len(parts) > 4 else ""
-                except (IndexError, ValueError):
-                    continue
-                all_events.append((ts_str, ev_type, target, ip, detail))
-    # Deduplicate by (timestamp, type, target)
-    seen = set()
-    unique = []
-    for ev in all_events:
-        key = (ev[0], ev[1], ev[2])
-        if key not in seen:
-            seen.add(key)
-            unique.append(ev)
-            if ev[1] in ("TRACK", "MODIFIED", "DELETED", "MOVED"):
-                accessed.add(ev[2])
-    unique.sort(key=lambda x: x[0])
-    return accessed, unique
+# ---------------------------------------------------------------------------
+# Custom CSS — clinical SOC dark theme
+# ---------------------------------------------------------------------------
+CSS = """
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<style>
+    .bi { vertical-align: -0.125em; }
+    /* Base */
+    .stApp { background-color: #090a0f; }
+    .main > div { padding: 1rem 1.5rem; }
+
+    /* Cards */
+    .card {
+        background: #0f1520;
+        border: 1px solid #1e293b;
+        border-radius: 12px; padding: 1.25rem; margin-bottom: 1rem;
+    }
+    .card-title {
+        font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
+        color: #64748b; margin-bottom: 0.75rem;
+    }
+
+    /* Alert banner */
+    .alert-critical {
+        background: linear-gradient(135deg, #450a0a 0%, #7f1d1d 100%);
+        border: 1px solid #ef4444; border-radius: 12px;
+        padding: 1.25rem 1.5rem; margin-bottom: 1rem;
+    }
+    .alert-critical h2 { color: #fca5a5; margin: 0 0 0.25rem; font-size: 1.25rem; }
+    .alert-critical p  { color: #fecaca; margin: 0; font-size: 0.9rem; }
+
+    .alert-stable {
+        background: linear-gradient(135deg, #052e16 0%, #14532d 100%);
+        border: 1px solid #10b981; border-radius: 12px;
+        padding: 1.25rem 1.5rem; margin-bottom: 1rem;
+    }
+    .alert-stable h2 { color: #86efac; margin: 0 0 0.25rem; font-size: 1.25rem; }
+    .alert-stable p  { color: #bbf7d0; margin: 0; font-size: 0.9rem; }
+
+    /* Risk score badge */
+    .risk-badge {
+        display: inline-block; border-radius: 999px;
+        padding: 0.2rem 0.8rem; font-size: 0.8rem; font-weight: 600;
+    }
+
+    /* Sections */
+    .section-label {
+        font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em;
+        color: #64748b; margin: 1.25rem 0 0.5rem; border-bottom: 1px solid #1e293b;
+        padding-bottom: 0.3rem;
+    }
+
+    /* Sidebar tweaks */
+    [data-testid="stSidebar"] { background-color: #0a0d14; border-right: 1px solid #1e293b; }
+    [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 {
+        color: #e2e8f0;
+    }
+
+    /* Override Streamlit defaults */
+    .stTextInput>div>div>input, .stNumberInput>div>div>input, .stTextArea>div>textarea {
+        background-color: #131a26 !important; border-color: #1e293b !important;
+        color: #e2e8f0 !important;
+    }
+    .stSelectbox>div>div>select { background-color: #131a26 !important; border-color: #1e293b !important; color: #e2e8f0 !important; }
+    .stRadio > div { color: #94a3b8 !important; }
+
+    /* Buttons */
+    .stButton > button[kind="primary"] {
+        background: linear-gradient(135deg, #059669, #10b981) !important;
+        border: none !important; color: white !important; font-weight: 600 !important;
+    }
+    .stButton > button[kind="secondary"] {
+        background: transparent !important; border: 1px solid #334155 !important;
+        color: #94a3b8 !important;
+    }
+    .stButton > button:hover {
+        transform: translateY(-1px); box-shadow: 0 4px 12px rgba(16,185,129,0.2);
+    }
+
+    /* Data frame */
+    .stDataFrame { background: transparent !important; }
+    .stDataFrame td, .stDataFrame th {
+        background-color: #0f1520 !important; color: #cbd5e1 !important;
+        border-color: #1e293b !important;
+    }
+
+    hr { border-color: #1e293b !important; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #090a0f; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+</style>
+"""
+
+# ---------------------------------------------------------------------------
+# Database helpers
+# ---------------------------------------------------------------------------
+def init_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS assessments (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            patient_id      TEXT UNIQUE,
+            patient_name    TEXT NOT NULL,
+            age_days        INTEGER,
+            temperature     REAL,
+            heart_rate      INTEGER,
+            respiratory_rate INTEGER,
+            weight          REAL,
+            maternal_history TEXT DEFAULT '',
+            acoustic_classification  INTEGER,
+            acoustic_probability     REAL,
+            acoustic_risk_score      REAL,
+            triage_risk     TEXT,
+            triage_summary  TEXT,
+            referral_letter TEXT,
+            created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.commit()
+    conn.close()
 
 
-def build_static_graph(company_name, manifest_entries):
-    G = nx.DiGraph()
-    center = f"File Server\n{company_name}"
-    G.add_node(center, type="server", label=company_name)
-
-    dept_files = {}
-    for entry in manifest_entries:
-        dept = entry.get("department", "Unknown")
-        fname = entry.get("file", "")
-        dept_files.setdefault(dept, []).append(fname)
-
-    for dept in sorted(dept_files):
-        dept_node = f"[{dept}]"
-        G.add_node(dept_node, type="department")
-        G.add_edge(center, dept_node)
-        for fname in dept_files[dept]:
-            short = fname[:45] + "…" if len(fname) > 45 else fname
-            G.add_node(short, type="file", full_name=fname)
-            G.add_edge(dept_node, short)
-
-    return G, center
-
-
-def layout_positions(G, center):
-    pos = {}
-    center_node = None
-    for n, attr in G.nodes(data=True):
-        if attr.get("type") == "server":
-            center_node = n
-            break
-    if not center_node:
-        center_node = list(G.nodes())[0]
-    pos[center_node] = (0, 0)
-
-    dept_nodes = [n for n in G.nodes if n != center_node and G.nodes[n].get("type") == "department"]
-    n_depts = len(dept_nodes)
-
-    if n_depts > 0:
-        dept_spacing = max(5, n_depts * 1.5)
-        total_width = (n_depts - 1) * dept_spacing
-        start_x = -total_width / 2
-        for i, dn in enumerate(dept_nodes):
-            x = start_x + i * dept_spacing
-            pos[dn] = (x, -3)
-            children = [c for c in G.successors(dn) if G.nodes[c].get("type") == "file"]
-            n_files = len(children)
-            if n_files > 0:
-                file_spacing = 2.2
-                file_total = (n_files - 1) * file_spacing
-                file_start = x - file_total / 2
-                for j, fn in enumerate(children):
-                    pos[fn] = (file_start + j * file_spacing, -5.5)
-
-    leftover = [n for n in G.nodes if n not in pos]
-    for n in leftover:
-        pos[n] = (0, -8)
-    return pos
+def save_assessment(record: dict) -> None:
+    try:
+        conn = sqlite3.connect(DB_PATH, timeout=10)
+        conn.execute("""
+            INSERT OR REPLACE INTO assessments
+                (patient_id, patient_name, age_days, temperature, heart_rate,
+                 respiratory_rate, weight, maternal_history,
+                 acoustic_classification, acoustic_probability,
+                 acoustic_risk_score, triage_risk, triage_summary, referral_letter)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        """, (
+            record["patient_id"], record["patient_name"],
+            record["age_days"], record["temperature"],
+            record["heart_rate"], record["respiratory_rate"],
+            record["weight"], record["maternal_history"],
+            record["acoustic_classification"],
+            record["acoustic_probability"],
+            record["acoustic_risk_score"],
+            record["triage_risk"], record["triage_summary"],
+            record["referral_letter"],
+        ))
+        conn.commit()
+        conn.close()
+    except Exception as exc:
+        st.warning(f"Database write failed (non‑fatal): {exc}")
 
 
-def draw_graph(G, pos, accessed_files, container):
-    accessed = set()
-    for af in accessed_files:
-        base = os.path.basename(af)
-        accessed.add(base)
+def get_assessments() -> pd.DataFrame:
+    try:
+        conn = sqlite3.connect(DB_PATH, timeout=10)
+        df = pd.read_sql_query(
+            "SELECT patient_id, patient_name, age_days, temperature, "
+            "acoustic_risk_score, triage_risk, created_at "
+            "FROM assessments ORDER BY created_at DESC LIMIT 50", conn
+        )
+        conn.close()
+        return df
+    except Exception:
+        return pd.DataFrame()
 
-    node_colors = []
-    node_sizes = []
-    for n in G.nodes:
-        ntype = G.nodes[n].get("type", "")
-        full_name = G.nodes[n].get("full_name", "")
-        base_name = os.path.basename(full_name) if full_name else ""
-        is_accessed = (base_name in accessed or n in accessed or full_name in accessed)
 
-        if ntype == "server":
-            node_colors.append("#1565c0")
-            node_sizes.append(5000)
-        elif ntype == "department":
-            node_colors.append("#e65100")
-            node_sizes.append(3000)
-        else:
-            node_colors.append("#c62828" if is_accessed else "#2e7d32")
-            node_sizes.append(2200)
+# ---------------------------------------------------------------------------
+# Gemini integration  (Tier 2)
+# ---------------------------------------------------------------------------
+GEMINI_AVAILABLE = False
+gemini_client = None
+if GEMINI_API_KEY:
+    try:
+        from google import genai
+        gemini_client = genai.Client(api_key=GEMINI_API_KEY)
+        GEMINI_AVAILABLE = True
+    except Exception:
+        GEMINI_AVAILABLE = False
 
-    fig, ax = plt.subplots(figsize=(20, 12))
-    fig.patch.set_facecolor("#0d1117")
-    ax.set_facecolor("#0d1117")
 
-    nx.draw_networkx_edges(
-        G, pos, ax=ax,
-        edge_color="#444",
-        arrows=True,
-        arrowsize=25,
-        arrowstyle="-|>",
-        width=3,
-        alpha=0.5,
+def _build_triage_prompt(
+    risk_level: str, risk_score: float, anomaly_score: float,
+    age_days: int, temperature: float, heart_rate: int,
+    respiratory_rate: int, weight: float, maternal_history: str,
+) -> str:
+    return f"""You are a neonatal triage specialist at a rural health post in Rwanda. An infant has been assessed by the Humura acoustic triage system. Generate a structured clinical brief in the EXACT three‑section format below.
+
+ACOUSTIC ANALYSIS:
+- Risk Classification: {risk_level} (Score: {risk_score:.0f}/100)
+- Anomaly Index: {anomaly_score:.2f}
+
+VITAL SIGNS:
+- Age: {age_days} days
+- Temperature: {temperature:.1f} °C
+- Heart Rate: {heart_rate} bpm
+- Respiratory Rate: {respiratory_rate} breaths/min
+- Weight: {weight:.2f} kg
+
+MATERNAL HISTORY:
+{maternal_history or "None reported"}
+
+---
+
+## 1. Emergency Assessment Profile
+(Suspected conditions, severity level, and key clinical reasoning.)
+
+## 2. Recommended Immediate Stabilization Steps
+(Actionable steps the referring nurse or midwife can take with available resources — airway, breathing, circulation, warmth, monitoring.)
+
+## 3. Emergency Referral Letter Draft
+(Addressed to the Medical Officer in Charge, nearest referral hospital — include patient summary, reason for referral, and clinical notes.)"""
+
+
+def _call_gemini(prompt: str) -> str | None:
+    try:
+        resp = gemini_client.models.generate_content(
+            model=GEMINI_MODEL, contents=prompt,
+            config={"temperature": 0.3, "max_output_tokens": 4096},
+        )
+        return resp.text
+    except Exception:
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Clinical rule engine  (fallback when Gemini is unavailable)
+# ---------------------------------------------------------------------------
+def _clinical_rule_engine(
+    risk_score: float, anomaly_score: float,
+    age_days: int, temperature: float, heart_rate: int,
+    respiratory_rate: int, weight: float, maternal_history: str,
+) -> dict:
+
+    alerts = []
+
+    if risk_score >= 80:
+        alerts.append("Critical acoustic distress pattern — high probability of neurological or respiratory compromise.")
+    elif risk_score >= 50:
+        alerts.append("Elevated acoustic anomaly index — abnormal cry characteristics detected.")
+
+    if temperature > 38.0:
+        alerts.append(f"Fever ({temperature:.1f}°C) — suspect infection / sepsis.")
+    elif temperature < 36.0:
+        alerts.append(f"Hypothermia ({temperature:.1f}°C) — suspect sepsis or metabolic disorder.")
+
+    if respiratory_rate > 65:
+        alerts.append(f"Severe tachypnoea (RR {respiratory_rate}) — urgent respiratory assessment needed.")
+    elif respiratory_rate > 60:
+        alerts.append(f"Tachypnoea (RR {respiratory_rate}) — possible respiratory distress.")
+
+    if heart_rate < 100:
+        alerts.append(f"Bradycardia (HR {heart_rate}) — possible neurological distress or hypoxia.")
+    elif heart_rate > 180:
+        alerts.append(f"Tachycardia (HR {heart_rate}) — possible distress, sepsis, or dehydration.")
+
+    if weight < 2.5:
+        alerts.append(f"Low birth weight ({weight:.2f} kg) — increased vulnerability.")
+
+    if age_days <= 7:
+        alerts.append("Neonate in first week of life — elevated risk of early‑onset sepsis.")
+
+    n_critical = sum(1 for a in alerts if any(k in a for k in ("Critical", "Severe", "urgent")))
+
+    if n_critical >= 2 or risk_score >= 85:
+        risk = "CRITICAL"
+        color = "#ef4444"
+        recommendation = "IMMEDIATE REFERRAL — Stabilise and transport to nearest referral hospital without delay."
+    elif len(alerts) >= 2 or risk_score >= 60:
+        risk = "HIGH"
+        color = "#f59e0b"
+        recommendation = "URGENT — Transfer to district health centre. Initiate monitoring and first‑line interventions per IMCI guidelines."
+    elif len(alerts) >= 1 or risk_score >= 40:
+        risk = "MODERATE"
+        color = "#3b82f6"
+        recommendation = "Monitor closely. Re‑assess vital signs every 30 minutes. Refer if condition worsens."
+    else:
+        risk = "STABLE"
+        color = "#10b981"
+        recommendation = "Cry pattern within normal range. Continue routine newborn care. Re‑assess if new symptoms develop."
+
+    assessment_lines = "\n".join(f"- {a}" for a in alerts) if alerts else "No acute clinical alerts generated."
+
+    pid = st.session_state.get("patient_id", f"HUM-{dt.date.today().strftime('%Y%m%d')}-001")
+    pname = st.session_state.get("patient_name", "Unknown")
+
+    summary = f"""**Clinical Alerts**  
+{assessment_lines}
+
+**Recommendation**  
+{recommendation}"""
+
+    referral = f"""**EMERGENCY REFERRAL LETTER**
+
+**To:** Medical Officer in Charge — Nearest Referral Hospital
+**From:** {pname} — referring clinician, {st.session_state.get("clinic_name", "Rural Health Post")}
+**Patient:** {pname} (ID: {pid}), {age_days}‑day‑old neonate
+
+**Reason for referral:**  
+{risk}‑risk triage classification following acoustic and clinical assessment.
+
+**Clinical summary:**  
+{alerts[0] if alerts else "See above alerts."}
+
+**Vitals:** Temp {temperature:.1f}°C | HR {heart_rate} bpm | RR {respiratory_rate} | Wt {weight:.2f} kg
+
+**Action requested:** Urgent paediatric evaluation and management.
+
+_Generated by Project Humura — Neonatal Cry Diagnostic Triage Platform_"""
+
+    return {
+        "risk": risk,
+        "color": color,
+        "summary": summary,
+        "referral_letter": referral,
+        "findings": alerts,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Spectrogram figure
+# ---------------------------------------------------------------------------
+def build_spectrogram_figure(spec: dict) -> go.Figure:
+    fig = go.Figure()
+
+    fig.add_trace(go.Heatmap(
+        z=spec["spectrogram"], x=spec["times"], y=spec["frequencies"],
+        colorscale="Viridis", name="dB",
+        colorbar=dict(title="dB", len=0.85, x=1.02),
+        hovertemplate="Time: %{x:.2f}s<br>Freq: %{y:.0f} Hz<br>Mag: %{z:.1f} dB<extra></extra>",
+    ))
+
+    f0 = spec.get("f0_track")
+    if f0 is not None:
+        f0_clean = np.where(f0 > 0, f0, np.nan)
+        ft = spec.get("f0_times", [])
+        fig.add_trace(go.Scatter(
+            x=ft, y=f0_clean, mode="lines",
+            line=dict(color="white", width=2),
+            name="F0 Contour",
+            hovertemplate="Time: %{x:.2f}s<br>F0: %{y:.0f} Hz<extra>F0</extra>",
+        ))
+
+    fig.add_hrect(y0=HEALTHY_F0_LOW, y1=HEALTHY_F0_HIGH,
+                  fillcolor="#10b981", opacity=0.06, line_width=0, name="Healthy F0")
+    fig.add_hline(y=HEALTHY_F0_LOW, line_color="#10b981",
+                  line_dash="dash", line_width=1.5)
+    fig.add_hline(y=HEALTHY_F0_HIGH, line_color="#10b981",
+                  line_dash="dash", line_width=1.5)
+
+    fig.add_annotation(x=spec["times"][-1] if len(spec["times"]) else 1,
+                       y=HEALTHY_F0_LOW + 15,
+                       text="Healthy F0 Range", showarrow=False,
+                       font=dict(size=10, color="#10b981"),
+                       xanchor="right")
+
+    fig.update_layout(
+        template="plotly_dark",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#e2e8f0"),
+        xaxis_title="Time (s)",
+        yaxis_title="Frequency (Hz)",
+        yaxis_range=[0, 4000],
+        height=380,
+        margin=dict(l=40, r=50, t=20, b=40),
+        hovermode="x unified",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     )
-
-    nx.draw_networkx_nodes(
-        G, pos, ax=ax,
-        node_color=node_colors,
-        node_size=node_sizes,
-        edgecolors="#666",
-        linewidths=3,
-    )
-
-    labels = {}
-    for n in G.nodes:
-        ntype = G.nodes[n].get("type", "")
-        label = n[:50]
-        if len(n) > 50:
-            label += "…"
-        labels[n] = label
-
-    for ntype_filter, font_sz in [("server", 17), ("department", 14), ("file", 11)]:
-        filtered = {n: l for n, l in labels.items() if G.nodes[n].get("type", "") == ntype_filter}
-        if filtered:
-            nx.draw_networkx_labels(
-                G, pos, ax=ax,
-                labels=filtered,
-                font_size=font_sz,
-                font_color="#e0e0e0",
-                font_weight="bold",
-                bbox=dict(facecolor="#1a1a2e", edgecolor="#333", alpha=0.95, pad=5, boxstyle="round,pad=0.4"),
-            )
-
-    ax.set_title(
-        "Project Ember — HoneyToken Minefield",
-        fontsize=24, fontweight="bold", color="#e0e0e0", pad=20,
-    )
-    ax.axis("off")
-    fig.tight_layout()
-    container.pyplot(fig)
-    plt.close(fig)
+    return fig
 
 
-# ── UI ────────────────────────────────────────────────────────────────
-st.markdown(
-    "<h1 style='display:flex; align-items:center; gap:12px; margin-bottom:0;'>"
-    "<span style='background:linear-gradient(135deg,#c62828,#ff1744); "
-    "width:40px; height:40px; border-radius:10px; display:flex; "
-    "align-items:center; justify-content:center; font-size:1.4rem;'>"
-    "<i class='bi bi-activity' style='color:#fff;'></i></span> "
-    "<span style='background:linear-gradient(135deg,#e0e0e0,#fff); "
-    "-webkit-background-clip:text; -webkit-text-fill-color:transparent;'>"
-    "Project Ember</span></h1>",
-    unsafe_allow_html=True,
-)
-st.markdown(
-    "<p style='color:#666; margin-top:-8px; font-size:0.9rem; letter-spacing:0.5px;'>"
-    "<i class='bi bi-shield-check' style='margin-right:6px;'></i>"
-    "The AI HoneyToken Factory — Deploy intelligent decoys to trap ransomware &amp; malicious insiders</p>",
-    unsafe_allow_html=True,
-)
+# ---------------------------------------------------------------------------
+# Feature summary as mini table rows
+# ---------------------------------------------------------------------------
+def feature_summary_html(features: dict) -> str:
+    if not features:
+        return "<p style='color:#64748b'>No features available.</p>"
 
-# ── Sidebar: Configuration ───────────────────────────────────────────
-with st.sidebar:
+    rows = []
+    pairs = [
+        ("f0_mean", "F0 Mean", "Hz", 350, 650),
+        ("f0_std", "F0 Std Dev", "Hz", 20, 120),
+        ("spectral_centroid_mean", "Spectral Centroid", "Hz", 1500, 3500),
+        ("bandwidth_mean", "Bandwidth", "Hz", 1500, 3500),
+        ("zcr_mean", "Zero‑Crossing Rate", "", 0.02, 0.10),
+        ("rms_mean", "RMS Energy", "", 0.01, 0.15),
+    ]
+    for key, label, unit, lo, hi in pairs:
+        val = features.get(key)
+        if val is None:
+            continue
+        ok = lo <= val <= hi
+        badge = "<i class='bi bi-check-circle-fill' style='color:#10b981'></i>" if ok else "<i class='bi bi-x-circle-fill' style='color:#ef4444'></i>"
+        unit_str = f" {unit}" if unit else ""
+        rows.append(
+            f"<tr><td style='color:#94a3b8;padding:2px 8px'>{badge} {label}"
+            f"</td><td style='text-align:right;font-weight:600'>{val:.1f}{unit_str}</td>"
+            f"<td style='text-align:right;color:#64748b;font-size:0.8em'>(norm {lo}–{hi})</td></tr>"
+        )
+    return f"<table style='width:100%'>" + "".join(rows) + "</table>"
+
+
+# ===================================================================
+# MAIN APP
+# ===================================================================
+
+init_db()
+engine = get_engine()
+
+# ── Initialise session state ─────────────────────────────────────
+for key in ("analysis_done", "last_result", "last_spec", "last_triage"):
+    if key not in st.session_state:
+        st.session_state[key] = None if key != "analysis_done" else False
+
+# ── Inject CSS ───────────────────────────────────────────────────
+st.markdown(CSS, unsafe_allow_html=True)
+
+# ── Title bar ────────────────────────────────────────────────────
+c1, c2 = st.columns([0.08, 0.92])
+with c1:
+    st.markdown("<h1 style='font-size:2rem;margin:0;color:#10b981'>"
+                "<i class='bi bi-heart-pulse-fill'></i></h1>",
+                unsafe_allow_html=True)
+with c2:
     st.markdown(
-        "<h3 style='display:flex;align-items:center;gap:8px;margin:0;padding:0;'>"
-        "<i class='bi bi-sliders' style='color:#42a5f5;'></i> Configuration</h3>",
+        "<h1 style='margin:0;font-size:1.5rem'>PROJECT HUMURA</h1>"
+        "<p style='margin:0;color:#64748b;font-size:0.85rem'>"
+        "<i class='bi bi-ear'></i> Neonatal Cry Acoustic Diagnostic Triage  •  "
+        "<span style='color:#10b981'><i class='bi bi-shield-fill-check'></i> "
+        "Low‑Resource Setting</span></p>",
         unsafe_allow_html=True,
     )
 
-    company_name = st.text_input(
-        "Company Name",
-        value=st.session_state.company_name,
-        placeholder="e.g., Acme Kenya Ltd",
-    )
-    st.session_state.company_name = company_name
+st.markdown("---")
 
-    industry = st.text_input(
-        "Industry",
-        value=st.session_state.industry,
-        placeholder="e.g., Financial Services",
-    )
-    st.session_state.industry = industry
+# ═══════════════════════════════════════════════════════════════
+# SIDEBAR — patient form + audio source
+# ═══════════════════════════════════════════════════════════════
+with st.sidebar:
+    st.markdown("### <i class='bi bi-person-badge'></i> Patient Information", unsafe_allow_html=True)
 
-    departments = list(DEPARTMENT_PROMPTS.keys())
-    selected_dept = st.selectbox("Department", departments, index=0)
-
-    output_dir = st.text_input(
-        "Output Directory",
-        value=st.session_state.output_dir,
-    )
-    st.session_state.output_dir = output_dir
-
-    _cfg = _load_config()
-    tracker_base_url = st.text_input(
-        "Tracking Server Public URL",
-        value=_cfg.get("tracker_base_url", "http://localhost:8765"),
-        placeholder="http://localhost:8765 or https://track.loca.lt",
-        help="Public URL of the tracking server for pixel beacons. Use localhost for local testing, or the localtunnel URL for judges to test from their own laptops.",
-    )
-    _save_config("tracker_base_url", tracker_base_url)
-    st.caption(f"Pixel: `{tracker_base_url}/track?file=FILENAME`")
-
-    # Auto-detect LAN IP for sidebar help
-    import socket as _socket
-    try:
-        _s = _socket.socket(_socket.AF_INET, _socket.SOCK_DGRAM)
-        _s.connect(("8.8.8.8", 80))
-        _lan_ip = _s.getsockname()[0]
-        _s.close()
-        st.markdown(
-            f"<p style='color:#888;font-size:0.8rem;margin:0;padding:0;'>"
-            f"<i class='bi bi-wifi' style='font-size:0.8em;'></i>  "
-            f"LAN IP: <code>{_lan_ip}</code><br>"
-            f"Dashboard: <code>http://{_lan_ip}:8501</code><br>"
-            f"Tracking: <code>http://{_lan_ip}:8765</code></p>",
-            unsafe_allow_html=True,
-        )
-    except Exception:
-        pass
-
-    # Parse the base URL for the generator
-    try:
-        parsed_url = urlparse(tracker_base_url)
-        tracker_host = parsed_url.hostname or "localhost"
-        tracker_port = parsed_url.port or 8765
-    except Exception:
-        tracker_host = "localhost"
-        tracker_port = 8765
-
-    col1, col2 = st.columns([1, 1], gap="small")
-    with col1:
-        deploy_btn = st.button("Deploy Decoys", type="primary", width="stretch")
-    with col2:
-        if st.button("Clear Log", width="stretch"):
-            open(ALERTS_LOG, "w").close()
-            db.clear()
-            st.session_state.accessed_files = set()
-            st.rerun()
-
-    with st.expander("Notifications & Deployment", expanded=False):
-        slack_url = st.text_input(
-            "Slack Webhook URL",
-            value=_cfg.get("slack_url", ""),
-            placeholder="https://hooks.slack.com/services/...",
-            help="Paste a Slack Incoming Webhook URL to get push alerts on your phone",
-        )
-        _save_config("slack_url", slack_url)
-        smb_path = st.text_input(
-            "Deploy Target Path",
-            value=_cfg.get("smb_path", ""),
-            placeholder="/mnt/fileserver/shared/ or //SERVER/share",
-            help="SMB/network path to auto-deploy honeytokens (optional)",
-        )
-        _save_config("smb_path", smb_path)
-    
-    st.divider()
-    st.markdown(
-        "**How it works**\n\n"
-        "1. Configure your company profile\n"
-        "2. Click Deploy to generate 3 realistic decoy files\n"
-        "3. Place the files on a file server or share\n"
-        "4. The dashboard monitors for file access & modification\n"
-        "5. When a trap is triggered, you get an instant alert"
-    )
-
-# ── Deploy ────────────────────────────────────────────────────────────
-if deploy_btn:
-    with st.spinner("Gemini is crafting your honeytokens..."):
-        try:
-            manifest = generate_honeytokens(
-                company_name=company_name,
-                department=selected_dept,
-                output_dir=output_dir,
-                tracker_host=tracker_host,
-                tracker_port=tracker_port,
+    with st.form("patient_form", clear_on_submit=False):
+        col_a, col_b = st.columns(2)
+        with col_a:
+            pname = st.text_input("Baby's Name / ID", placeholder="e.g. HUM‑001",
+                                  key="patient_name")
+            age_days = st.number_input("Age (days)", min_value=0, max_value=365,
+                                       value=3, key="patient_age_days")
+            temperature = st.number_input("Temperature (°C)", min_value=32.0,
+                                          max_value=42.0, value=37.0, step=0.1,
+                                          key="patient_temp")
+            heart_rate = st.number_input("Heart Rate (bpm)", min_value=60,
+                                         max_value=220, value=140,
+                                         key="patient_hr")
+        with col_b:
+            respiratory_rate = st.number_input("Respiratory Rate (/min)",
+                                               min_value=20, max_value=100,
+                                               value=45, key="patient_rr")
+            weight = st.number_input("Weight (kg)", min_value=0.5, max_value=10.0,
+                                     value=3.2, step=0.1, key="patient_weight")
+            maternal_history = st.text_area(
+                "Maternal History",
+                placeholder="Infections, medications, delivery complications…",
+                key="patient_history",
             )
-            st.session_state.deployed = True
-            st.success(
-                f"Deployed {len(manifest)} honeytokens to `{output_dir}/`",
-            )
-            for entry in manifest:
-                st.code(f"  {entry['file']}  —  tracking: {entry['tracking_id']}")
+        st.form_submit_button("Save Patient Data",
+                              use_container_width=True, type="secondary")
 
-            # Auto-deploy to SMB/network path if configured
-            if smb_path.strip():
-                import shutil
-                smb_dest = Path(smb_path.strip())
-                try:
-                    smb_dest.mkdir(parents=True, exist_ok=True)
-                    for entry in manifest:
-                        src = Path(output_dir) / entry["file"]
-                        dst = smb_dest / entry["file"]
-                        shutil.copy2(src, dst)
-                    st.success(f"Also deployed to network path: `{smb_dest}/`")
-                except Exception as smb_err:
-                    st.warning(f"Network deploy failed: {smb_err}")
+    st.markdown("---")
+    st.markdown("### <i class='bi bi-mic'></i> Audio Source", unsafe_allow_html=True)
 
-            time.sleep(0.5)
-            st.rerun()
-        except Exception as e:
-            st.error(f"Deployment failed: {e}", icon="🚨")
+    audio_source = st.segmented_control(
+        "Select input method",
+        options=["🎤 Live Mic", "📁 Upload Audio", "🧪 Simulated Profile"],
+        default="🎤 Live Mic",
+        key="audio_source",
+        label_visibility="collapsed",
+    )
 
-# ── Main layout ───────────────────────────────────────────────────────
-col_left, col_right = st.columns([3, 2], gap="large")
+    audio_bytes = None
+    profile_label = ""
 
-# ── Graph (STATIC — renders once, never auto-refreshes) ───────────────
-with col_left:
-    st.markdown("<h3><i class='bi bi-diagram-3-fill' style='color:#1565c0;'></i> HoneyToken Minefield</h3>", unsafe_allow_html=True)
-    graph_placeholder = st.empty()
-
-manifest_path = os.path.join(output_dir, "manifest.json")
-accessed_files, all_events = parse_alerts()
-st.session_state.accessed_files = accessed_files
-
-graph_state = {"G": None, "center_node": None}
-if os.path.exists(manifest_path):
-    with open(manifest_path) as f:
-        manifest_entries = json.load(f)
-    G, center_node = build_static_graph(company_name, manifest_entries)
-    graph_state = {"G": G, "center_node": center_node}
-    if G and center_node:
-        pos_map = layout_positions(G, center_node)
-        with col_left:
-            graph_placeholder.empty()
-            draw_graph(G, pos_map, accessed_files, col_left)
+    if "Live Mic" in audio_source:
+        audio_value = st.audio_input(
+            "Record live infant cry telemetry",
+            key="live_mic",
+        )
+        if audio_value:
+            audio_bytes = audio_value.read()
+            profile_label = "Live mic capture"
+            st.success("Audio captured successfully!")
+    elif "Simulated Profile" in audio_source:
+        profile = st.selectbox(
+            "Simulation Profile",
+            [
+                "Normal Discomfort Cry",
+                "High‑Risk Asphyxia Marker",
+                "High‑Risk Respiratory Distress",
+            ],
+            key="sim_profile",
+        )
+        cat_map = {
+            "Normal Discomfort Cry": "normal",
+            "High‑Risk Asphyxia Marker": "distress",
+            "High‑Risk Respiratory Distress": "distress",
+        }
+        audio_bytes = engine.generate_simulated_cry(cat_map[profile])
+        profile_label = profile
+        st.info(f"Using pre‑loaded simulation: {profile}")
     else:
-        with col_left:
-            graph_placeholder.info(
-                "No honeytokens deployed yet. "
-                "Configure and click **Deploy Decoys** in the sidebar.",
-            )
-
-# ── Live panels (alerts + metrics + log — text only, no graph redraw) ─
-with col_right:
-    st.markdown("<h3><i class='bi bi-shield-exclamation' style='color:#c62828;'></i> Live Threat Monitor</h3>", unsafe_allow_html=True)
-    alert_placeholder = st.empty()
-
-metrics_placeholder = st.empty()
-log_placeholder = st.empty()
-
-
-def render_static_panels(events):
-    recent = events[-50:][::-1] if events else []
-    intrusion = any(e[1] in ("TRACK", "MODIFIED", "DELETED", "MOVED") for e in recent[:10])
-
-    with col_right:
-        alert_placeholder.empty()
-        with alert_placeholder.container():
-            if intrusion:
-                st.error(
-                    "**CRITICAL INTRUSION DETECTED!**\n\n"
-                    "One or more honeytokens have been accessed or modified.",
-                )
-                st.markdown(
-                    "<div style='background:#c62828; color:#fff; padding:12px; "
-                    "border-radius:6px; text-align:center; font-size:1.4rem; "
-                    "font-weight:bold;'>"
-                    "INTRUSION IN PROGRESS</div>",
-                    unsafe_allow_html=True,
-                )
-            else:
-                st.info("All honeytokens are quiet. No intrusions detected.")
-
-            if recent:
-                df = pd.DataFrame(recent[:15], columns=["Timestamp", "Type", "Target", "IP", "User-Agent"])
-                df["Type"] = df["Type"].apply(
-                    lambda t: {
-                        "TRACK": "TRACK",
-                        "MODIFIED": "MODIFY",
-                        "DELETED": "DELETE",
-                        "CREATED": "CREATE",
-                        "MOVED": "MOVE",
-                        "WATCHDOG_STARTED": "START",
-                        "WATCHDOG_STOPPED": "STOP",
-                    }.get(t, t)
-                )
-                st.dataframe(df, width="stretch", hide_index=True)
-            else:
-                st.caption("No events yet.")
-
-    with metrics_placeholder.container():
-        mcol1, mcol2, mcol3, mcol4 = st.columns(4)
-        total_tokens = 0
-        if os.path.exists(manifest_path):
-            with open(manifest_path) as f:
-                total_tokens = len(json.load(f))
-        with mcol1:
-            st.metric("Active Tokens", total_tokens)
-        with mcol2:
-            st.metric("Tracking Hits", db.count_by_type("TRACK"))
-        with mcol3:
-            st.metric("Filesystem Events",
-                db.count_by_type("CREATED") + db.count_by_type("MODIFIED")
-                + db.count_by_type("DELETED") + db.count_by_type("MOVED"))
-        with mcol4:
-            st.metric("Total Events", db.count())
-
-    with log_placeholder.container():
-        with st.expander("Full Event Log", expanded=False):
-            if events:
-                full_df = pd.DataFrame(events, columns=["Timestamp", "Type", "Target", "IP", "User-Agent"])
-                full_df = full_df.iloc[::-1]
-                st.dataframe(full_df, width="stretch", hide_index=True)
-            else:
-                st.caption("No events logged yet.")
-
-
-render_static_panels(all_events)
-
-# ── Tiny notification poller (only this auto-refreshes, no visible flicker) ──
-if "prev_event_count" not in st.session_state:
-    st.session_state.prev_event_count = len(all_events)
-
-
-@st.fragment(run_every=1)
-def event_poller():
-    accessed_files, events = parse_alerts()
-    n = len(events)
-    prev = st.session_state.prev_event_count
-    new_count = n - prev
-    latest_events = events[-5:][::-1] if events else []
-
-    # Decide if alert banner should show (last event within 10s)
-    show_alert = False
-    if events:
-        try:
-            latest_ts = datetime.fromisoformat(events[-1][0])
-            show_alert = (datetime.now() - latest_ts).total_seconds() < 10
-        except (ValueError, IndexError):
-            pass
- 
-    # Sound on new events (fires once)
-    if new_count > 0:
-        st.session_state.prev_event_count = n
-
-        components.html(
-            """
-            <script>
-            try {
-                var ctx = new (window.AudioContext || window.webkitAudioContext)();
-                var now = ctx.currentTime;
-                var o1 = ctx.createOscillator();
-                var g1 = ctx.createGain();
-                o1.type = 'sine'; o1.frequency.value = 180;
-                g1.gain.setValueAtTime(0, now);
-                g1.gain.linearRampToValueAtTime(0.5, now + 0.03);
-                g1.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
-                o1.connect(g1); g1.connect(ctx.destination);
-                o1.start(now); o1.stop(now + 0.25);
-                var o2 = ctx.createOscillator();
-                var g2 = ctx.createGain();
-                o2.type = 'sawtooth';
-                o2.frequency.setValueAtTime(500, now + 0.12);
-                o2.frequency.linearRampToValueAtTime(900, now + 0.35);
-                g2.gain.setValueAtTime(0, now + 0.12);
-                g2.gain.linearRampToValueAtTime(0.2, now + 0.18);
-                g2.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
-                o2.connect(g2); g2.connect(ctx.destination);
-                o2.start(now + 0.12); o2.stop(now + 0.5);
-                setTimeout(function(){ ctx.close(); }, 600);
-            } catch(e) {}
-            </script>
-            """,
-            height=0,
+        uploaded = st.file_uploader(
+            "Upload infant cry recording",
+            type=["wav", "mp3", "ogg", "flac"],
+            key="uploaded_audio",
         )
+        if uploaded:
+            audio_bytes = uploaded.read()
+            profile_label = uploaded.name
 
-    # Slack: fires for all recent events + re-sends when URL changes
-    if show_alert and slack_url:
-        last_slack = st.session_state.get("last_slack_ts", "")
-        latest_ts = events[-1][0] if events else ""
-        if latest_ts != last_slack:
-            st.session_state.last_slack_ts = latest_ts
-            latest = events[-1]
-            slack_text = (
-                f"🚨 *Project Ember — Intrusion Detected*\n"
-                f"• *File:* `{latest[2]}`\n"
-                f"• *Type:* `{latest[1]}`\n"
-                f"• *Time:* `{latest[0]}`\n"
-                f"• *IP:* `{latest[3]}` ({geoip(latest[3])})\n"
-                f"• *Browser:* `{latest[4][:80]}`"
-            )
-            _send_slack(slack_url, slack_text)
+    st.markdown("---")
 
-    # Browser notification (works in background tabs)
-    if show_alert:
-        components.html(
-            """
-            <script>
-            if ('Notification' in window && Notification.permission === 'granted') {
-                var n = new Notification('Project Ember — Intrusion Detected', {
-                    body: 'New security event detected — click to open dashboard',
-                    icon: 'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/icons/activity.svg',
-                    tag: 'ember-alert',
-                    requireInteraction: true
-                });
-                n.onclick = function() { window.focus(); };
-            }
-            </script>
-            """,
-            height=0,
-        )
+    analyze_btn = st.button(
+        "▶ Run Triage Analysis",
+        type="primary",
+        use_container_width=True,
+    )
 
-    if show_alert:
-        # AI Intrusion Analysis (cached — runs once per alert burst)
-        ai_analysis = st.session_state.get("_ai_analysis", "")
-        if not ai_analysis:
+    if GEMINI_AVAILABLE:
+        st.markdown("<span style='color:#10b981'><i class='bi bi-cpu'></i> Gemini AI triage engine enabled</span>", unsafe_allow_html=True)
+    else:
+        st.markdown("<span style='color:#f59e0b'><i class='bi bi-cpu'></i> Gemini unavailable — using local clinical rules</span>", unsafe_allow_html=True)
+
+    if GEMINI_AVAILABLE:
+        st.caption(f"Engine: {GEMINI_MODEL}")
+
+# ═══════════════════════════════════════════════════════════════
+# MAIN AREA — analysis and results
+# ═══════════════════════════════════════════════════════════════
+
+# ── Run analysis ──────────────────────────────────────────────
+if analyze_btn:
+    pname = st.session_state.get("patient_name", "").strip()
+    if not pname:
+        st.error("Please enter the baby's name / ID before running analysis.")
+    elif audio_bytes is None:
+        st.error("Please provide an audio recording or select a simulated profile.")
+    else:
+        pid = f"HUM-{dt.date.today().strftime('%Y%m%d')}-{int(time.time()) % 10000:04d}"
+        st.session_state["patient_id"] = pid
+
+        with st.spinner("Running acoustic analysis…"):
+            result = engine.evaluate_cry(audio_bytes)
+            spec = engine.compute_spectrogram(audio_bytes)
+
+        triage = None
+        if result["error"]:
+            st.error(f"Acoustic analysis error: {result['error']}")
+        else:
+            # Determine risk level label
+            rs = result["risk_score"]
+
+            if rs >= 80:
+                risk_label = "CRITICAL"
+            elif rs >= 50:
+                risk_label = "HIGH"
+            elif rs >= 41:
+                risk_label = "MODERATE"
+            else:
+                risk_label = "STABLE"
+
+            # Tier‑2 triage
+            if rs >= HIGH_RISK_THRESHOLD:
+                prompt = _build_triage_prompt(
+                    risk_label, rs, result.get("anomaly_score", 0),
+                    st.session_state.patient_age_days,
+                    st.session_state.patient_temp,
+                    st.session_state.patient_hr,
+                    st.session_state.patient_rr,
+                    st.session_state.patient_weight,
+                    st.session_state.get("patient_history", ""),
+                )
+
+                if GEMINI_AVAILABLE:
+                    with st.spinner("Generating clinical triage brief (Gemini)…"):
+                        gemini_text = _call_gemini(prompt)
+                        if gemini_text:
+                            triage = {
+                                "risk": risk_label,
+                                "color": "#ef4444" if rs >= 80 else "#f59e0b",
+                                "summary": gemini_text,
+                                "referral_letter": gemini_text,
+                            }
+                        else:
+                            triage = _clinical_rule_engine(
+                                rs, result.get("anomaly_score", 0),
+                                st.session_state.patient_age_days,
+                                st.session_state.patient_temp,
+                                st.session_state.patient_hr,
+                                st.session_state.patient_rr,
+                                st.session_state.patient_weight,
+                                st.session_state.get("patient_history", ""),
+                            )
+                            st.markdown("<span style='color:#f59e0b'><i class='bi bi-exclamation-circle'></i> Gemini call failed — fell back to local clinical rules.</span>", unsafe_allow_html=True)
+                else:
+                    triage = _clinical_rule_engine(
+                        rs, result.get("anomaly_score", 0),
+                        st.session_state.patient_age_days,
+                        st.session_state.patient_temp,
+                        st.session_state.patient_hr,
+                        st.session_state.patient_rr,
+                        st.session_state.patient_weight,
+                        st.session_state.get("patient_history", ""),
+                    )
+            else:
+                triage = {
+                    "risk": risk_label,
+                    "color": "#10b981",
+                    "summary": "Acoustic pattern is within normal limits for a healthy neonate. No immediate clinical intervention indicated. Continue routine newborn care and monitor for any change in feeding, tone, or cry quality.",
+                    "referral_letter": "Not required. Routine care.",
+                }
+
+            # Save to database
             try:
-                events_text = "\n".join(
-                    f"{e[0]} | {e[1]} | {e[2]} | IP: {e[3]} | UA: {e[4][:60]}"
-                    for e in events[-5:]
-                )
-                ai_analysis = analyze_intrusion(events_text)
-                st.session_state._ai_analysis = ai_analysis
-            except Exception:
-                ai_analysis = ""
+                save_assessment({
+                    "patient_id": pid,
+                    "patient_name": pname,
+                    "age_days": st.session_state.patient_age_days,
+                    "temperature": st.session_state.patient_temp,
+                    "heart_rate": st.session_state.patient_hr,
+                    "respiratory_rate": st.session_state.patient_rr,
+                    "weight": st.session_state.patient_weight,
+                    "maternal_history": st.session_state.get("patient_history", ""),
+                    "acoustic_classification": result["classification"],
+                    "acoustic_probability": result["probability"],
+                    "acoustic_risk_score": result["risk_score"],
+                    "triage_risk": triage["risk"],
+                    "triage_summary": triage["summary"],
+                    "referral_letter": triage.get("referral_letter", ""),
+                })
+            except Exception as exc:
+                st.warning(f"Could not save record: {exc}")
 
-        details = ""
-        for ev in latest_events[:3]:
-            ts_str, ev_type, target, ip, ua = ev[0], ev[1], ev[2], ev[3], ev[4]
-            short_tgt = os.path.basename(target) if target else target
-            ua_short = ua[:60] + "…" if len(ua) > 60 else ua
-            details += (
-                f"<div style='display:flex;align-items:center;gap:8px;"
-                f"padding:3px 0;font-size:12px;'>"
-                f"<span class='flash-node' style='display:inline-block;width:10px;"
-                f"height:10px;border-radius:50%;background:#ff1744;flex-shrink:0;'></span>"
-                f"<span style='color:rgba(255,255,255,0.5);font-weight:normal;'>{ts_str}</span>"
-                f"<span style='font-weight:bold;color:#fff;'>{ev_type}</span>"
-                f"<span style='color:rgba(255,255,255,0.9);'>{short_tgt}</span>"
-                f"<span style='color:rgba(255,255,255,0.6);font-size:11px;'>{geoip(ip)}</span>"
-                f"<span style='color:rgba(255,255,255,0.4);font-size:10px;'>{ua_short}</span>"
-                f"</div>"
-            )
+        # Store in session
+        st.session_state["last_result"] = result
+        st.session_state["last_spec"] = spec
+        st.session_state["last_triage"] = triage
+        st.session_state["analysis_done"] = True
+        st.rerun()
 
-        st.error(
-            f"**CRITICAL INTRUSION DETECTED** — {len(latest_events)} recent event(s)\n\n"
-            f"See banner above for file details, attacker IP, and browser profile.",
-        )
+# ── Display results (from session state) ─────────────────────
+if st.session_state.get("analysis_done"):
+    result = st.session_state["last_result"]
+    spec = st.session_state["last_spec"]
+    triage = st.session_state["last_triage"]
 
-        st.markdown(
-            f"<div style='position:fixed;top:0;left:0;right:0;"
-            f"z-index:999999;background:linear-gradient(135deg,#c62828,#b71c1c);"
-            f"color:#fff;padding:14px 28px;"
-            f"box-shadow:0 4px 30px rgba(198,40,40,0.6);"
-            f"border-bottom:2px solid rgba(255,255,255,0.15);'>"
-            f"<div style='display:flex;align-items:center;gap:10px;font-size:18px;font-weight:bold;'>"
-            f"<i class='bi bi-exclamation-triangle-fill' style='font-size:1.3em;'></i> "
-            f"CRITICAL INTRUSION DETECTED"
-            f"</div>"
-            f"<div style='margin-top:6px;font-size:13px;color:rgba(255,255,255,0.85);'>"
-            f"{new_count} new security event(s):</div>"
-            f"{details}"
-            f"</div>",
-            unsafe_allow_html=True,
-        )
+    if result and not result["error"]:
 
-        # AI analysis card
-        if ai_analysis:
+        # ── Alert banner ──────────────────────────────────
+        rs = result["risk_score"]
+        if rs >= 80:
+            st.markdown(f"""
+            <div class="alert-critical">
+                <h2><i class='bi bi-exclamation-triangle-fill'></i> CRITICAL — Immediate Referral Needed</h2>
+                <p>Risk Score <strong>{rs:.0f}/100</strong>  •  
+                Classification: <strong>{triage["risk"] if triage else "CRITICAL"}</strong>  •  
+                Confidence: <strong>{result["probability"]*100:.1f}%</strong></p>
+            </div>
+            """, unsafe_allow_html=True)
+        elif rs >= 50:
+            st.markdown(f"""
+            <div class="alert-critical">
+                <h2><i class='bi bi-exclamation-triangle-fill'></i> HIGH‑RISK TRIAGE ALERT</h2>
+                <p>Risk Score <strong>{rs:.0f}/100</strong>  •  
+                Classification: <strong>{triage["risk"] if triage else "HIGH"}</strong>  •  
+                Confidence: <strong>{result["probability"]*100:.1f}%</strong></p>
+            </div>
+            """, unsafe_allow_html=True)
+        elif rs >= 41:
+            st.markdown(f"""
+            <div style="background:linear-gradient(135deg,#422006 0%,#713f12 100%);
+                        border:1px solid #f59e0b;border-radius:12px;
+                        padding:1.25rem 1.5rem;margin-bottom:1rem">
+                <h2 style="color:#fde68a;margin:0 0 0.25rem;font-size:1.25rem">
+                    <i class='bi bi-exclamation-circle-fill'></i> MODERATE — Monitor Closely</h2>
+                <p style="color:#fef3c7;margin:0;font-size:0.9rem">
+                Risk Score <strong>{rs:.0f}/100</strong>  •  Elevated acoustic pattern. Re-assess in 30 minutes and monitor for changes in feeding, tone, or breathing.</p>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown(f"""
+            <div class="alert-stable">
+                <h2><i class='bi bi-check-circle-fill'></i> STABLE — Low‑Risk Cry Pattern</h2>
+                <p>Risk Score <strong>{rs:.0f}/100</strong>  •  
+                Acoustic pattern within normal limits.</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+        # ── Spectrogram + Features ───────────────────────
+        col_vis, col_feat = st.columns([0.68, 0.32])
+
+        with col_vis:
+            if spec and spec.get("spectrogram") is not None:
+                fig = build_spectrogram_figure(spec)
+                st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+        with col_feat:
+            feat = result.get("features", {})
+            if feat:
+                st.markdown("<div class='card' style='min-height:380px'>"
+                            "<div class='card-title'><i class='bi bi-graph-up'></i> Extracted Acoustic Features</div>"
+                            + feature_summary_html(feat) +
+                            "</div>", unsafe_allow_html=True)
+
+        # ── Triage result ────────────────────────────────
+        if triage:
+            risk = triage.get("risk", "")
+            color = triage.get("color", "#64748b")
+            summary = triage.get("summary", "")
+            referral = triage.get("referral_letter", "")
+
+            st.markdown("<div class='card'>"
+                        "<div class='card-title'><i class='bi bi-clipboard2-pulse'></i> Triage Result Matrix</div>",
+                        unsafe_allow_html=True)
+
+            # Risk badge
             st.markdown(
-                f"<div style='background:rgba(16,24,40,0.95);border:1px solid #c62828;"
-                f"border-radius:12px;padding:16px;margin-top:12px;'>"
-                f"<div style='display:flex;align-items:center;gap:8px;margin-bottom:8px;'>"
-                f"<i class='bi bi-cpu' style='color:#42a5f5;font-size:1.2em;'></i>"
-                f"<span style='color:#fff;font-weight:700;font-size:0.9rem;'>"
-                f"Gemini Threat Analysis</span></div>"
-                f"<div style='color:#ccc;font-size:0.8rem;line-height:1.6;white-space:pre-wrap;'>"
-                f"{ai_analysis}</div></div>",
+                f"<span class='risk-badge' "
+                f"style='background:{color}22;color:{color};border:1px solid {color}'>"
+                f"{risk}</span>",
                 unsafe_allow_html=True,
             )
+            st.markdown(f"<span style='color:#94a3b8;font-size:0.85rem;margin-left:0.5rem'>"
+                        f"Risk Score: {result['risk_score']:.0f}/100  |  "
+                        f"Probability: {result['probability']*100:.1f}%</span>",
+                        unsafe_allow_html=True)
 
-    # Reset AI analysis cache when alert clears
-    if not show_alert:
-        st.session_state._ai_analysis = ""
+            if rs >= 50:
+                st.markdown("""
+                <div style='margin-top:1rem'>
+                    <div class='section-label'><i class='bi bi-clipboard2-pulse'></i> Clinical Triage Brief</div>
+                </div>
+                """, unsafe_allow_html=True)
+                st.markdown(summary)
 
-    # Bottom-right badge
-    st.markdown(
-        f"<div style='position:fixed;bottom:16px;right:16px;z-index:99999;"
-        f"background:#1a1a2e;color:#e0e0e0;padding:6px 14px;"
-        f"border-radius:20px;font-size:13px;border:1px solid #444;"
-        f"box-shadow:0 2px 12px rgba(0,0,0,0.5);'>"
-        f"<i class='bi bi-bar-chart-fill' style='margin-right:4px;'></i> {n} events"
-        f"</div>",
-        unsafe_allow_html=True,
-    )
+                if referral:
+                    with st.expander("📄 Emergency Referral Letter Draft"):
+                        st.markdown(referral)
+
+                st.markdown("""
+                <div style='margin-top:1rem;padding:0.75rem;background:#1e293b33;
+                            border-radius:8px;border-left:3px solid #ef4444'>
+                    <p style='margin:0;color:#fca5a5;font-size:0.85rem'>
+                    <i class='bi bi-info-circle-fill'></i> This triage guidance is generated for clinical decision support.
+                    Always consult a qualified health professional for definitive diagnosis
+                    and treatment.</p>
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown(f"<div style='margin-top:0.75rem'>{summary}</div>",
+                            unsafe_allow_html=True)
+
+            st.markdown("</div>", unsafe_allow_html=True)
+
+    elif result and result["error"]:
+        st.error(f"Acoustic analysis failed: {result['error']}")
+
+else:
+    # ── Empty state ─────────────────────────────────────
+    st.markdown("""
+    <div style='text-align:center;padding:4rem 2rem'>
+        <p style='font-size:3.5rem;margin:0;color:#10b981'><i class='bi bi-heart-pulse-fill'></i></p>
+        <h3 style='color:#64748b;margin:0.5rem 0'>Ready for Triage Assessment</h3>
+        <p style='color:#475569;max-width:480px;margin:0 auto'>
+        Complete the patient information form and select an audio source in the sidebar,
+        then click <strong>Run Triage Analysis</strong> to begin.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
 
 
-event_poller()
-
-# ── Refresh button ────────────────────────────────────────────────────
-st.markdown("<br>", unsafe_allow_html=True)
-if st.button("Refresh Dashboard", type="secondary"):
-    st.rerun()
+# ── Patient assessment ledger (always visible) ────────────
+st.markdown("<div class='card'><div class='card-title'>"
+            "Patient Assessment Ledger</div>", unsafe_allow_html=True)
+ledger = get_assessments()
+if not ledger.empty:
+    ledger_display = ledger.copy()
+    ledger_display.columns = [
+        "ID", "Name", "Age (d)", "Temp (°C)",
+        "Risk Score", "Triage", "Recorded",
+    ]
+    st.dataframe(ledger_display, use_container_width=True, hide_index=True)
+else:
+    st.markdown("<span style='color:#64748b'><i class='bi bi-database'></i> No assessments recorded yet. Run a triage to populate the ledger.</span>", unsafe_allow_html=True)
+st.markdown("</div>", unsafe_allow_html=True)

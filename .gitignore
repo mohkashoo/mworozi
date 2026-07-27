@@ -9,5 +9,9 @@ honeytokens/*.html
 honeytokens/manifest.json
 honeytokens/*.md
 honeytokens/*.txt
+humura.db
+/tmp/baby_cry_cache/
 *.pyc
 __pycache__/
+.env
+train.py

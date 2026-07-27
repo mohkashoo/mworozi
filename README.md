@@ -1,284 +1,167 @@
-# Project Ember — The AI HoneyToken Factory
+# 🫀 Project Humura — Neonatal Cry Acoustic Diagnostic Triage
 
-A cybersecurity deception platform for African SMEs that uses Google Gemini to generate realistic decoy documents that trap ransomware and malicious insiders. **Winner-ready for 200-dev hackathon finals.**
-
----
-
-## The Problem
-
-African SMEs face the same threats as global enterprises — ransomware, insider data theft, and targeted attacks — but lack the budget for enterprise-grade deception tech (e.g., Illusive Networks, Attivo). When ransomware hits, it's often too late: files are encrypted, data is exfiltrated, and there are no logs to trace the source.
+A low-resource clinical triage platform for rural African midwives. Listens to an infant's cry, runs local acoustic AI to detect distress patterns, and generates a structured triage brief via Google Gemini.
 
 ---
 
-## How Project Ember Solves It
-
-Project Ember flips the asymmetry: instead of trying to block every attack, you **plant decoys** that look like high-value targets (payroll spreadsheets, HR records, IT credentials) across your file servers. When an attacker touches one — whether it's ransomware encrypting files, or an insider browsing sensitive docs — the dashboard alerts you in real time with the attacker's IP address, browser fingerprint, and geolocation.
-
-### The Flow
+## How It Works
 
 ```
-1. DEPLOY ──> Gemini generates 3 realistic decoy files (.txt, .md, .html)
-              with hidden tracking pixels and fake corporate data
-              (payrolls, employee records, IT audit reports)
-
-2. PLACE  ──> Copy or auto-deploy to your file server, shared drive,
-              or sensitive folder where attackers would look
-
-3. WAIT   ──> The dashboard monitors:
-              • Tracking pixel hits (file opened / viewed via browser)
-              • Filesystem changes (modified / deleted / renamed)
-              • Attacker IP + User-Agent + GeoIP location from beacon
-              • All via the watchdog daemon + tracking server
-
-4. ALERT  ──> When a trap is triggered (within 1 second):
-              • OS-level browser notification (works in background)
-              • Slack push alert to your phone anywhere
-              • Full-screen red banner persists for 10 seconds
-              • Shows file name, timestamp, attacker IP, browser, location
-              • Sky News–style audible alarm
-              • Graph node turns red with pulsing animation
-              • Event logged to SQLite database
+🧑‍⚕️ MIDWIFE → 🎤 RECORD CRY (2s live mic / upload / simulate)
+       ↓
+🧠 TIER 1 — LOCAL AI (on laptop, no internet)
+   • Extracts 36 acoustic features via librosa
+   • Random Forest classifies: normal (0) or distress (1)
+   • Risk score 0–100
+       ↓
+🤖 TIER 2 — GENERATIVE AI (Gemini, only if distress detected)
+   • Reads: acoustic score + vitals + maternal history
+   • Generates: assessment + stabilization steps + referral letter
+   • Falls back to rule engine if API key missing / quota exceeded
+       ↓
+📋 RESULT → Alert banner + spectrogram + clinical brief + referral letter
 ```
 
 ---
 
-## Current Capabilities
+## AI Models
 
-| Feature | Status |
-|---|---|
-| **AI Decoy Generation** — Gemini 2.0 Flash generates convincing corporate documents with African context (KES/NGN currencies, KRA/FIRS compliance, local names, East African logistics routes) | ✅ |
-| **Quota Fallback** — when Gemini API quota is exhausted, falls back to pre-written professional mock documents (zero network calls) | ✅ |
-| **4 Department Templates** — Finance (payroll), HR (employee records), IT (network audit), Operations (supply chain) | ✅ |
-| **3 Output Formats** — `.txt`, `.md`, `.html` per deployment | ✅ |
-| **Hidden Tracking Pixels** — `<img>` beacon in HTML/MD files; logs hits to the dashboard | ✅ |
-| **Attacker Intelligence** — IP address + User-Agent extracted from every beacon request | ✅ |
-| **GeoIP Location** — offline dictionary maps IPs to African cities (🇷🇼 Kigali, 🇰🇪 Nairobi, 🇳🇬 Lagos, 🇿🇦 Cape Town) | ✅ |
-| **Filesystem Watchdog** — detects MODIFIED, DELETED, MOVED, CREATED events in real time | ✅ |
-| **SQLite Persistence** — all events stored in `ember.db` with WAL mode for concurrent multi-process access | ✅ |
-| **Network Topology Graph** — tree-layout visualization (server → departments → decoy files) using networkx + matplotlib; nodes flash red on access | ✅ |
-| **Live Threat Monitor** — event log with timestamps, types, file names, IPs, and User-Agents | ✅ |
-| **Explosive Alert** — full-width red banner at page top with file details + attacker intel, persists 10s | ✅ |
-| **Flashing Red Nodes** — graph nodes pulse red automatically when a file is accessed | ✅ |
-| **Audible Alarm** — Sky News–style two-tone alert (bass thump + rising sweep) via Web Audio API | ✅ |
-| **Browser Notification** — OS-level system notification works even when tab is in background | ✅ |
-| **Slack Webhook** — push alerts to your phone anywhere with file name, IP, GeoIP, browser profile | ✅ |
-| **Async Slack** — fires in background thread, never blocks the UI (0.1s response) | ✅ |
-| **1-Second Polling** — background poller checks every 1s for instant graph + alert updates without page flicker | ✅ |
-| **High-Contrast Dark UI** — optimized for washed-out venue projectors (white text, neon accents, 800-weight fonts) | ✅ |
-| **Persistence** — Slack webhook URL saved to `ember_config.json` (survives full page refresh, browser restart, machine switch) | ✅ |
-| **SMB Auto-Deploy** — enter a network path to copy honeytokens directly to file servers | ✅ |
-| **Mock Mode** — works without API key; full professional documents with tables, bank accounts, compliance jargon | ✅ |
+| Model | Location | Purpose | Training Data |
+|-------|----------|---------|---------------|
+| **Random Forest Classifier** | `audio_processor.py` (scikit-learn) | Classifies cry into **normal** (class 0) or **distress** (class 1) | **1,267 samples**: 845 real baby cries + 422 synthetic distress cries. 200 trees, max depth 16. |
+| **Google Gemini `gemini-flash-latest`** | `app.py` — Tier 2 | Generates structured triage brief + referral letter | Pre-trained foundation model. Prompted with acoustic score + vitals. |
+| **Clinical Rule Engine** | `app.py` (built-in fallback) | 8 clinical rules evaluating vitals + acoustic score → CRITICAL / HIGH / MODERATE / STABLE | Rule-based (no training). Always runs when Gemini is unavailable. |
+
+**Model locked to disk** (`cry_model.joblib`) — consistent predictions across restarts. No retraining wait.
 
 ---
 
-## Tech Stack
+## Audio / Signal Processing (librosa)
 
-| Layer | Technology |
-|---|---|
-| **AI Engine** | Google Gemini 2.0 Flash via `google-genai` SDK |
-| **Dashboard** | Streamlit 1.60+ |
-| **Graph Visualization** | networkx + matplotlib |
-| **Database** | SQLite with WAL mode (concurrent multi-process safe) |
-| **Fake Data** | Faker (custom African name pool, IBANs, ID numbers) |
-| **File Monitoring** | watchdog (filesystem event listener) |
-| **Tracking Server** | Python `http.server` (lightweight, returns 1×1 GIF pixel, logs HTTP request metadata) |
-| **Alert Sound** | Web Audio API (generated in-browser, no audio files) |
-| **Browser Notification** | Notification API (OS-level, works in background tabs) |
-| **Slack Integration** | Incoming Webhooks via `urllib` (async, non-blocking) |
-| **GeoIP** | Offline prefix dictionary (zero network calls, instant) |
-| **Icons** | Bootstrap Icons CDN |
-| **Background Tasks** | Python threading + Streamlit fragments |
+| Feature | What it measures | Normal Baby | Distress Baby |
+|---------|-----------------|-------------|---------------|
+| **F0 (Fundamental Frequency)** | Pitch of the cry | 350–650 Hz (stable) | 150–1000 Hz (volatile) |
+| **MFCCs (13 coefficients)** | Voice-print / timbre | Low variance | High variance |
+| **Spectral Centroid** | Brightness of the sound | 1500–3000 Hz | 800–5000 Hz |
+| **Spectral Bandwidth** | Frequency spread | 1500–3000 Hz | 800–6000 Hz |
+| **Spectral Rolloff** | Where 85% of energy is | 2000–4000 Hz | 1000–7000 Hz |
+| **Zero-Crossing Rate** | Noisiness of signal | 0.02–0.08 | 0.05–0.25 |
+| **RMS Energy** | Loudness over time | 0.01–0.10 | 0.01–0.20 |
+| **STFT Spectrogram** | Time-frequency heatmap (Plotly) | — | — |
+| **librosa.yin** | Pitch tracking algorithm | — | — |
+
+**36 features** per cry sample (8 descriptors × 2 stats + 13 MFCCs × 2 stats)
 
 ---
 
-## How to Use
+## Training Data
 
-### 1. Install
+The model is trained on **real infant cry recordings** from the public `mahmudulhasan01/baby_crying_sound` dataset on Hugging Face.
 
-```bash
-cd Project_Ember
-pip install -r requirements.txt
-export GEMINI_API_KEY="your_google_ai_key_here"
-```
+| Category | Label | Count | Class |
+|----------|-------|-------|-------|
+| Hungry | non-urgent | 382 | normal |
+| Discomfort | non-urgent | 135 | normal |
+| Tired | non-urgent | 132 | normal |
+| Burping | non-urgent | 108 | normal |
+| Laugh | non-urgent | 108 | normal |
+| Silence | non-urgent | 108 | normal |
+| Synthetic distress | high-risk | 422 | distress |
 
-### 2. Launch
-
-```bash
-python3 run.py
-```
-
-This starts three services:
-- **Tracking server** on `:8765` — handles beacon pixel requests, logs IP + User-Agent
-- **Watchdog daemon** — monitors `./honeytokens/` for file changes
-- **Streamlit dashboard** on `:8501` — the UI
-
-### 3. Deploy Decoys
-
-1. Open `http://localhost:8501` in a browser
-2. Enter a **Company Name** (e.g., "Acme Kenya Ltd")
-3. Pick a **Department** (Finance / HR / IT / Operations)
-4. Click **Deploy HoneyTokens**
-
-Three files appear in `./honeytokens/`:
-- `Company_Dept_20260724.html` — open this in a browser to test tracking
-- `Company_Dept_20260724.md`
-- `Company_Dept_20260724.txt`
-
-### 4. Configure Slack (Optional)
-
-In the sidebar, expand "Notifications & Deployment" and paste your Slack webhook URL. It's saved to `ember_config.json` — persists across page refreshes, browser restarts, and machine switches. Enter once, forget it.
-
-### 5. Place the Traps
-
-Copy the generated files to your target environment — a file server, a shared drive, an HR document folder, or anywhere an attacker might browse. Or enter an SMB path in the sidebar for auto-deploy.
-
-### 6. Monitor
-
-When someone (or something) touches a decoy:
-
-| Action | What happens |
-|---|---|
-| Opens `.html` in a browser | Tracking pixel fires → red banner + sound + browser notification + **Slack alert on your phone** + graph node turns red + **IP + browser + GeoIP logged** |
-| Modifies a file (ransomware) | Watchdog catches → same alert chain + event log entry |
-| Deletes/moves a file | Watchdog catches → alert + log |
-
-### Demo: Trigger an Alert in 5 Seconds
-
-```bash
-# Simulate an attacker opening a stolen file from a remote machine
-curl -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120" \
-  "http://localhost:8765/track?file=payroll_2026_q3.html"
-```
-
-Within 1 second:
-- **Red banner**: "CRITICAL INTRUSION DETECTED"
-- **Attacker IP**: `127.0.0.1` → `🇷🇼 Kigali, Rwanda`
-- **Browser**: `Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120`
-- **Sound**: Sky News–style two-tone alarm
-- **Slack**: Push notification to your phone
-- **Browser notification**: OS popup even if tab is in background
-- **Graph**: Node flashes red
+**Total**: 845 real + 422 synthetic = **1,267 training samples**
 
 ---
 
-## Architecture
+## Features
 
-```
-┌──────────────────────────────────────────────────────────────────┐
-│                       run.py (launcher)                          │
-│  ┌───────────────┐  ┌───────────────┐  ┌───────────────────┐   │
-│  │   Tracking    │  │  Watchdog     │  │   Streamlit       │   │
-│  │   Server      │  │  Daemon       │  │   Dashboard       │   │
-│  │   :8765       │  │  (fs events)  │  │   :8501           │   │
-│  │  logs IP+UA   │  │               │  │   1s poller       │   │
-│  │  + GeoIP      │  │               │  │   SQLite R/W      │   │
-│  └──────┬────────┘  └──────┬────────┘  └──────┬────────────┘   │
-│         │                  │                   │                │
-└─────────┼──────────────────┼───────────────────┼────────────────┘
-          │                  │                   │
-          ▼                  ▼                   ▼
-     ┌──────────────────────────────────────────────┐
-     │              ember.db (SQLite + WAL)          │
-     │  events table: timestamp, type, target, IP,  │
-     │  User-Agent — concurrent read/write safe     │
-     └──────────────────────────────────────────────┘
-          │
-          ▼
-     Generator (Gemini + Faker) ──► ./honeytokens/
-     + ember_config.json (Slack URL, SMB path)
-```
+| Feature | Details |
+|---------|---------|
+| **🎤 3 audio input methods** | Live mic (`st.audio_input`), file upload, simulated profile |
+| **📊 Live spectrogram** | Plotly heatmap + F0 contour overlay + healthy range (350–650 Hz) |
+| **🟢🔴 Triage alerts** | CRITICAL (red) / HIGH (amber) / MODERATE (blue) / STABLE (green) |
+| **🤖 Gemini clinical brief** | Assessment + stabilization steps + referral letter |
+| **⚙️ Fallback rule engine** | 8 clinical rules, runs when Gemini is unavailable |
+| **📋 Patient ledger** | SQLite database, visible on every page load |
+| **🔬 Feature summary** | 6 key acoustic features with green/red indicators |
+| **🖤 Dark SOC theme** | Bootstrap Icons, clinical styling (#090a0f / #10b981 / #ef4444) |
 
 ---
 
-## File Structure
+## Infrastructure & UI
+
+| Technology | Version | Purpose |
+|-----------|---------|---------|
+| **Python** | 3.12 | Runtime |
+| **Streamlit** | 1.60.0 | Web application framework |
+| **Plotly** | 6.9.0 | Interactive spectrogram + feature charts |
+| **scikit-learn** | 1.9.0 | Random Forest classifier (200 trees) |
+| **librosa** | 0.11.0 | Audio feature extraction |
+| **joblib** | — | Model serialization (instant startup) |
+| **NumPy / SciPy** | — | Array operations, signal processing |
+| **SQLite** | — | Patient assessment ledger (`humura.db`) |
+| **Pandas** | 3.0.3 | Data querying + ledger display |
+| **google-genai** | 2.14.0 | Gemini API client |
+| **Bootstrap Icons** | 1.11.3 | Dashboard UI icons |
+| **python-dotenv** | 1.0.0 | Environment variable loading |
+| **Hugging Face Datasets** | — | 1,068 real infant cry WAV files for training |
+
+---
+
+## Project Structure
 
 ```
-Project_Ember/
-├── app.py                 # Streamlit dashboard (graph, alerts, metrics, SQLite)
-├── generator.py           # Gemini + Faker decoy generation
-├── watchdog_daemon.py     # Filesystem event monitor
-├── run.py                 # Launcher (tracking + watchdog + streamlit)
+├── app.py                 # Streamlit clinical interface
+├── audio_processor.py     # NeonatalAudioEngine (feature extraction + ML)
+├── train.py               # Training script (downloads HF dataset + trains model)
+├── cry_model.joblib       # Pre-trained Random Forest model (loaded at startup)
+├── cry_scaler.joblib      # Feature scaler
+├── cry_features.json      # Feature key ordering
 ├── requirements.txt       # Python dependencies
-├── README.md              # This file
-├── ember_config.json      # Persisted settings (Slack URL, SMB path)
-├── ember.db               # SQLite event database (with WAL)
-└── honeytokens/           # Generated decoy files
-    ├── manifest.json      # Tracking manifest
-    ├── *.html             # Decoy with pixel beacon
-    ├── *.md
-    └── *.txt
+├── .env.example           # Environment variable template
+├── .streamlit/config.toml # Streamlit theme config
+└── README.md
 ```
 
 ---
 
-## Winning the Judges' Demo
-
-### 30-Second Pitch Script
-
-> *"African SMEs can't afford $50k deception platforms. So we built one for $10/month.*
-
-> *Watch: I deploy 3 fake payroll files. [click Deploy] These look like real corporate documents — Gemini wrote them with Kenyan tax IDs and Mombasa–Kampala logistics routes.*
-
-> *I put them on a file server. [open the HTML file] The moment an attacker opens this... [red banner fires, sound plays]*
-
-> *We caught their IP — mapped to Kigali — their browser fingerprint, and pushed the alert to Slack. [show phone] The CISO knows before the ransomware finishes encrypting.*
-
-> *All logged to SQLite. All for the price of a coffee. That's Project Ember."*
-
-### Venue Checklist
-
-| Item | Status |
-|---|---|
-| `GEMINI_API_KEY` set (or falls back to mock) | ✅ |
-| Slack webhook URL pasted in sidebar (saved to disk) | ✅ |
-| `localtunnel` installed (`npm i -g localtunnel`) | ⚠️ Do this |
-| HDMI adapter | ⚠️ Bring one |
-| Phone on silent with Slack notifications enabled | ⚠️ Verify |
-| Sound on laptop speakers (not headphones) | ⚠️ Check |
-| Browser notification permission = Allow | ✅ First load prompts |
-
-### Connecting Judges to Your Demo
-
-#### Option 1: Same WiFi (simplest — works at most venues)
-
-If judges are on the same network as your laptop:
+## Run
 
 ```bash
-# Find your laptop's LAN IP:
-ip addr show | grep "inet " | grep -v 127.0.0.1
-# → 192.168.1.79
+# 1. Install dependencies
+pip install -r requirements.txt
 
-# Terminal 1:
-python3 run.py
+# 2. (Optional) Set Gemini API key for AI triage
+export GEMINI_API_KEY="your-key-here"
+export GEMINI_MODEL="gemini-flash-latest"
+
+# 3. Launch
+streamlit run app.py --server.enableCORS false
 ```
 
-Then paste `http://192.168.1.79:8501` into judges' browsers for the dashboard, and set **"Tracking Server Public URL"** to `http://192.168.1.79:8765` before deploying.
+**First launch**: loads pre-trained model instantly (~5s). No retraining needed.
 
-#### Option 2: Public Tunnel (for remote/isolated networks)
+**Offline**: Tier 1 acoustic analysis works with no internet. Tier 2 Gemini triage needs internet (falls back to rules gracefully).
 
-Use **`bore`** — a minimal TCP tunnel with zero warning pages (Localtunnel, Serveo, and ngrok all show interstitials that block tracking pixels).
+---
 
-```bash
-# Install bore: https://github.com/ekzhang/bore/releases
+## Deployment
 
-# Terminal 1 — full stack:
-python3 run.py
+| Scenario | Setup |
+|----------|-------|
+| **Phase 1 — Pilot** | Deploy on Railway / Hugging Face Spaces ($10/mo). 5 clinics get tablets with Chrome shortcut. No install. |
+| **Phase 2 — Offline** | Docker container with offline acoustic engine. Sync when connected. USB distribution for remote areas. |
+| **Scaling** | Switch SQLite → PostgreSQL for multi-clinic. Add simple PIN auth. |
 
-# Terminal 2 — expose the dashboard:
-bore local 8501 --to bore.pub
+---
 
-# Terminal 3 — expose the tracking server:
-bore local 8765 --to bore.pub
-```
+## Limitations
 
-Set **"Tracking Server Public URL"** to `http://bore.pub:[TRACKING_PORT]`.
+- Gemini free tier: ~60 req/min. Exceeded → falls back to rule engine.
+- Model trained on clean recordings. Noisy environments reduce accuracy.
+- Clinical decision support only — always consult a qualified health professional.
 
-#### Verify Cross-Machine:
+---
 
-```bash
-# From any laptop on any network:
-curl "http://YOUR_IP_OR_TUNNEL:8765/track?file=judge_demo"
-# → Dashboard alert + Slack on your phone
-```
+## Disclaimer
 
-Good luck. Go win.
+**Demonstration and research tool — not for clinical use.** No patient data is transmitted to external servers. Acoustic analysis runs entirely on-device.
