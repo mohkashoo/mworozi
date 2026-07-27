@@ -165,3 +165,5 @@ streamlit run app.py --server.enableCORS false
 ## Disclaimer
 
 **Demonstration and research tool — not for clinical use.** No patient data is transmitted to external servers. Acoustic analysis runs entirely on-device.
+
+Built with ❤️ for Rwanda
