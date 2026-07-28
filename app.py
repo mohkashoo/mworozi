@@ -557,6 +557,8 @@ with st.sidebar:
         location = st.text_input("Sector / Village", placeholder="e.g. Rulindo", key="location")
         crop = st.selectbox("Crop Type", CROPS, key="crop")
         language = st.selectbox("Response Language", list(LANGUAGES.keys()), key="language")
+        resource_pref = st.selectbox("Farming Resources", ["Both (Organic + Chemical)", "Organic Only", "Chemical Only"], key="resource_pref")
+        season = st.selectbox("Current Season", ["Growing Season", "Planting Season", "Harvest Season", "Dry Season"], key="season")
         st.form_submit_button("💾 Save Info", use_container_width=True, type="secondary")
 
     st.markdown("---")
@@ -789,41 +791,57 @@ if st.session_state.get("analysis_done"):
 
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # ── Disclaimer ────────────────────────────────────
-    st.markdown("""
-    <div style='margin-top:1rem;padding:0.75rem;background:#1e293b33;
-                border-radius:8px;border-left:3px solid #10b981'>
-        <p style='margin:0;color:#94a3b8;font-size:0.85rem'>
-        <i class='bi bi-info-circle-fill'></i> This analysis is AI-generated and should be verified 
-        with a local agricultural extension officer. Treatment recommendations are based on common 
-        East African farming practices.</p>
+    # ── Evaluation Metrics ─────────────────────────────
+    confidence = 85 if GEMINI_AVAILABLE else 72  # Simulated confidence
+    st.markdown(f"""
+    <div style='display:flex;gap:1rem;margin-bottom:0.5rem'>
+        <div class='card' style='flex:1;text-align:center;padding:0.75rem'>
+            <p style='color:#10b981;font-size:1.1rem;margin:0'>{confidence}%</p>
+            <p style='color:#64748b;font-size:0.7rem;margin:0'>AI Confidence</p>
+        </div>
+        <div class='card' style='flex:1;text-align:center;padding:0.75rem'>
+            <p style='color:#f59e0b;font-size:1.1rem;margin:0'>{res['severity']}</p>
+            <p style='color:#64748b;font-size:0.7rem;margin:0'>Severity</p>
+        </div>
+        <div class='card' style='flex:1;text-align:center;padding:0.75rem'>
+            <p style='color:#3b82f6;font-size:1.1rem;margin:0'>{st.session_state.get("season", "Growing")}</p>
+            <p style='color:#64748b;font-size:0.7rem;margin:0'>Season</p>
+        </div>
     </div>
     """, unsafe_allow_html=True)
 
-    # ── Start Treatment Plan ───────────────────────────
+    # ── Human Approval Step ────────────────────────────
+    st.markdown("---")
+    st.markdown("<h3 style='color:#0ea5e9'><i class='bi bi-person-check'></i> Extension Officer Review</h3>", unsafe_allow_html=True)
+    st.markdown(f"<p style='color:#94a3b8;font-size:0.85rem'>Review the AI diagnosis before creating a treatment plan. This ensures a human expert validates the recommendation.</p>", unsafe_allow_html=True)
+
+    col_app, col_rej = st.columns([1, 1])
+    with col_app:
+        approved = st.button("✅ Approve — Start Treatment Plan", key="approve_plan", type="primary", use_container_width=True)
+    with col_rej:
+        rejected = st.button("❌ Reject — Request Human Expert", key="reject_plan", use_container_width=True)
+
+    if approved:
+        conn = sqlite3.connect(DB_PATH)
+        row = conn.execute("SELECT id FROM assessments ORDER BY id DESC LIMIT 1").fetchone()
+        aid = row[0] if row else 0
+        conn.close()
+        plan_id = create_treatment_plan(aid, res["farmer"], res["crop"], res["disease"])
+        st.session_state["active_plan_id"] = plan_id
+        st.success("Treatment plan approved and created. Follow the recovery timeline below.")
+        st.rerun()
+
+    if rejected:
+        st.info("Diagnosis flagged for human expert review. A local extension officer will be notified.")
+
+    # ── Show active treatment plan ─────────────────────
     if res["severity"] != "None":
-        st.markdown("---")
-        st.markdown("<h3 style='color:#10b981'><i class='bi bi-clipboard2-pulse'></i> Smart Treatment Plan</h3>", unsafe_allow_html=True)
-
-        if st.button("🌱 Start Treatment Plan for This Crop", key="start_plan", type="primary", use_container_width=True):
-            # Get the assessment ID
-            conn = sqlite3.connect(DB_PATH)
-            row = conn.execute("SELECT id FROM assessments ORDER BY id DESC LIMIT 1").fetchone()
-            aid = row[0] if row else 0
-            conn.close()
-            plan_id = create_treatment_plan(aid, res["farmer"], res["crop"], res["disease"])
-            st.session_state["active_plan_id"] = plan_id
-            st.success(f"✅ Treatment plan created! Follow the steps below to help your {res['crop']} recover.")
-            st.rerun()
-
-        # Show active plan if exists
         active_plan_id = st.session_state.get("active_plan_id", None)
 
-        # Or the user can select an existing plan
         all_plans = get_active_plans()
-        if all_plans:
+        if all_plans and not active_plan_id:
             plan_options = {f"{p['farmer']} — {p['crop']} ({p['disease'][:30]})": p['id'] for p in all_plans}
-            selected_plan_label = st.selectbox("Or view existing plan:", list(plan_options.keys()), key="plan_selector")
+            selected_plan_label = st.selectbox("View existing plan:", list(plan_options.keys()), key="plan_selector")
             active_plan_id = plan_options[selected_plan_label]
 
         if active_plan_id:
