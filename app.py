@@ -596,6 +596,25 @@ if st.session_state.get("analysis_done"):
 
         if res["treatment"]:
             st.markdown(res["treatment"])
+
+            # Voice button
+            if st.button("🔊 Listen to Treatment (Audio)", key="voice_btn", use_container_width=True):
+                with st.spinner("Generating audio…"):
+                    try:
+                        from gtts import gTTS
+                        import io as tts_io
+                        # Take first 1000 chars for voice
+                        text_for_voice = res["treatment"].replace("##", "").replace("*", "")[:1000]
+                        lang_map = {"English": "en", "Kinyarwanda": "rw", "Swahili": "sw", "French": "fr"}
+                        tts_lang = lang_map.get(res.get("language", "English"), "en")
+                        tts = gTTS(text=text_for_voice, lang=tts_lang, slow=False)
+                        buf = tts_io.BytesIO()
+                        tts.write_to_fp(buf)
+                        buf.seek(0)
+                        st.audio(buf, format="audio/mp3")
+                        st.success("🔊 Playing treatment instructions — listen and share with the farmer")
+                    except Exception as e:
+                        st.warning(f"Voice generation unavailable: {e}")
         else:
             st.markdown("*No analysis available. Please try again with a clearer image.*")
 
