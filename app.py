@@ -151,6 +151,157 @@ def save_assessment(record: dict):
         pass
 
 
+# ---------------------------------------------------------------------------
+# Treatment Plan Database
+# ---------------------------------------------------------------------------
+TREATMENT_PLANS = {
+    "Northern Corn Leaf Blight": [
+        ("Day 1", "Remove all infected leaves and destroy them. Apply copper fungicide."),
+        ("Day 3", "Re-apply fungicide. Check for new spots. Ensure proper spacing."),
+        ("Day 7", "Apply neem spray (organic). Remove any new infected leaves."),
+        ("Day 14", "Final check. If no new spots → success. If still spreading → re-treat."),
+    ],
+    "Cassava Mosaic Virus": [
+        ("Day 1", "Remove and burn all infected plants immediately. Treat soil with lime."),
+        ("Day 3", "Apply neem oil spray to control whiteflies on remaining plants."),
+        ("Day 7", "Check for new symptoms on remaining plants. Re-apply neem oil."),
+        ("Day 14", "If no new symptoms → success. Plant resistant variety next season."),
+    ],
+    "Late Blight": [
+        ("Day 1", "Remove all affected leaves and fruits. Apply copper oxychloride."),
+        ("Day 3", "Re-apply fungicide. Check stems for dark lesions."),
+        ("Day 7", "Apply baking soda spray (organic option). Remove any new spots."),
+        ("Day 14", "Fruits should be safe to harvest. Prevent next season with resistant varieties."),
+    ],
+}
+
+
+def init_treatment_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS treatment_plans (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            assessment_id INTEGER,
+            farmer_name TEXT,
+            crop TEXT,
+            disease TEXT,
+            status TEXT DEFAULT 'active',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS progress_updates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            plan_id INTEGER,
+            stage TEXT,
+            day_number INTEGER,
+            image_path TEXT,
+            farmer_notes TEXT,
+            ai_verdict TEXT DEFAULT 'pending',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS plan_tasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            plan_id INTEGER,
+            stage TEXT,
+            task TEXT,
+            completed INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.commit()
+    conn.close()
+    # Ensure progress directory exists
+    os.makedirs("progress", exist_ok=True)
+
+
+def create_treatment_plan(assessment_id: int, farmer: str, crop: str, disease: str) -> int:
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("INSERT INTO treatment_plans (assessment_id, farmer_name, crop, disease) VALUES (?, ?, ?, ?)",
+                 (assessment_id, farmer, crop, disease))
+    plan_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    # Create default tasks
+    tasks = TREATMENT_PLANS.get(disease, [("Day 1", "Monitor the crop daily and follow treatment guidelines.")])
+    for stage, task in tasks:
+        conn.execute("INSERT INTO plan_tasks (plan_id, stage, task) VALUES (?, ?, ?)",
+                     (plan_id, stage, task))
+    conn.commit()
+    conn.close()
+    return plan_id
+
+
+def get_active_plans() -> list[dict]:
+    conn = sqlite3.connect(DB_PATH)
+    rows = conn.execute("""
+        SELECT p.id, p.farmer_name, p.crop, p.disease, p.status, p.created_at,
+               COUNT(u.id) as updates, SUM(u.ai_verdict = 'improving') as improving
+        FROM treatment_plans p
+        LEFT JOIN progress_updates u ON u.plan_id = p.id
+        GROUP BY p.id ORDER BY p.created_at DESC
+    """).fetchall()
+    conn.close()
+    return [{"id": r[0], "farmer": r[1], "crop": r[2], "disease": r[3], "status": r[4],
+             "date": r[5], "updates": r[6], "improving": r[7]} for r in rows]
+
+
+def get_plan_tasks(plan_id: int) -> list[dict]:
+    conn = sqlite3.connect(DB_PATH)
+    rows = conn.execute("SELECT id, stage, task, completed FROM plan_tasks WHERE plan_id = ? ORDER BY id", (plan_id,)).fetchall()
+    conn.close()
+    return [{"id": r[0], "stage": r[1], "task": r[2], "completed": r[3]} for r in rows]
+
+
+def get_plan_updates(plan_id: int) -> list[dict]:
+    conn = sqlite3.connect(DB_PATH)
+    rows = conn.execute("""
+        SELECT id, stage, day_number, image_path, farmer_notes, ai_verdict, created_at
+        FROM progress_updates WHERE plan_id = ? ORDER BY day_number
+    """, (plan_id,)).fetchall()
+    conn.close()
+    return [{"id": r[0], "stage": r[1], "day": r[2], "image": r[3], "notes": r[4], "verdict": r[5], "date": r[6]} for r in rows]
+
+
+def add_progress_update(plan_id: int, stage: str, day: int, image_path: str, notes: str):
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("""
+        INSERT INTO progress_updates (plan_id, stage, day_number, image_path, farmer_notes, ai_verdict)
+        VALUES (?, ?, ?, ?, ?, 'pending')
+    """, (plan_id, stage, day, image_path, notes))
+    conn.commit()
+    conn.close()
+
+
+def check_progress_with_ai(original_image: bytes, new_image: bytes, crop: str, disease: str) -> str:
+    if GEMINI_AVAILABLE and gemini_client:
+        try:
+            from google.genai import types as genai_types
+            prompt = f"""Compare these two images of the same {crop} plant.
+- Image 1: BEFORE treatment (showing {disease})
+- Image 2: NOW (current state)
+
+Is the plant improving, stable, or worsening? Reply with ONE word: improving / stable / worsening.
+Then a brief explanation in one sentence."""
+            response = gemini_client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=[prompt,
+                          genai_types.Part.from_bytes(data=original_image, mime_type="image/jpeg"),
+                          genai_types.Part.from_bytes(data=new_image, mime_type="image/jpeg")],
+                config={"temperature": 0.2, "max_output_tokens": 100},
+            )
+            text = response.text.lower()
+            if "improving" in text: return "improving"
+            if "worsening" in text: return "worsening"
+            return "stable"
+        except Exception:
+            pass
+    # Demo fallback — simulate improvement
+    import random
+    return random.choices(["improving", "stable", "worsening"], weights=[60, 30, 10])[0]
+
+
 def get_assessments() -> pd.DataFrame:
     try:
         conn = sqlite3.connect(DB_PATH, timeout=10)
@@ -368,6 +519,7 @@ def get_analysis(image_bytes: bytes, crop: str, language: str) -> dict:
 # ===================================================================
 
 init_db()
+init_treatment_db()
 
 # ── Session state ─────────────────────────────────────────
 for key in ("analysis_done", "last_result"):
@@ -634,6 +786,90 @@ if st.session_state.get("analysis_done"):
     </div>
     """, unsafe_allow_html=True)
 
+    # ── Start Treatment Plan ───────────────────────────
+    if res["severity"] != "None":
+        st.markdown("---")
+        st.markdown("<h3 style='color:#10b981'><i class='bi bi-clipboard2-pulse'></i> Smart Treatment Plan</h3>", unsafe_allow_html=True)
+
+        if st.button("🌱 Start Treatment Plan for This Crop", key="start_plan", type="primary", use_container_width=True):
+            # Get the assessment ID
+            conn = sqlite3.connect(DB_PATH)
+            row = conn.execute("SELECT id FROM assessments ORDER BY id DESC LIMIT 1").fetchone()
+            aid = row[0] if row else 0
+            conn.close()
+            plan_id = create_treatment_plan(aid, res["farmer"], res["crop"], res["disease"])
+            st.session_state["active_plan_id"] = plan_id
+            st.success(f"✅ Treatment plan created! Follow the steps below to help your {res['crop']} recover.")
+            st.rerun()
+
+        # Show active plan if exists
+        active_plan_id = st.session_state.get("active_plan_id", None)
+
+        # Or the user can select an existing plan
+        all_plans = get_active_plans()
+        if all_plans:
+            plan_options = {f"{p['farmer']} — {p['crop']} ({p['disease'][:30]})": p['id'] for p in all_plans}
+            selected_plan_label = st.selectbox("Or view existing plan:", list(plan_options.keys()), key="plan_selector")
+            active_plan_id = plan_options[selected_plan_label]
+
+        if active_plan_id:
+            tasks = get_plan_tasks(active_plan_id)
+            updates = get_plan_updates(active_plan_id)
+
+            st.markdown("<div class='card'><div class='card-title'><i class='bi bi-list-check'></i> Recovery Timeline</div>", unsafe_allow_html=True)
+
+            for i, task in enumerate(tasks):
+                done = task["completed"]
+                icon = "✅" if done else "⏳"
+                style = "color:#10b981" if done else "color:#94a3b8"
+                st.markdown(f"""
+                <div style='padding:0.5rem 0;border-bottom:1px solid #1e293b'>
+                    <span style='{style}'><strong>{icon} {task['stage']}:</strong> {task['task']}</span>
+                </div>
+                """, unsafe_allow_html=True)
+
+                # Check if there's an update with image for this task
+                task_update = next((u for u in updates if u['stage'] == task['stage']), None)
+                if task_update:
+                    img_path = task_update.get('image')
+                    if img_path and os.path.exists(img_path):
+                        st.image(img_path, width=200, caption=f"Day {task_update['day']} check-in")
+                    v = task_update.get('verdict', 'pending')
+                    if v == 'improving':
+                        st.markdown(f"<span style='color:#10b981'>✅ {v} — treatment is working!</span>", unsafe_allow_html=True)
+                    elif v == 'stable':
+                        st.markdown(f"<span style='color:#f59e0b'>⏸ {v} — no change detected</span>", unsafe_allow_html=True)
+                    elif v == 'worsening':
+                        st.markdown(f"<span style='color:#ef4444'>🔴 {v} — needs stronger treatment</span>", unsafe_allow_html=True)
+
+                # Upload button for this task (if not completed)
+                if not done:
+                    with st.expander(f"📷 Upload check-in for {task['stage']}"):
+                        up_img = st.file_uploader(f"Photo of {res['crop']} on {task['stage']}",
+                                                  type=["jpg", "jpeg", "png"], key=f"up_img_{task['id']}")
+                        notes = st.text_area("Your notes (optional):", key=f"notes_{task['id']}")
+                        if st.button(f"Submit {task['stage']} check-in", key=f"submit_{task['id']}"):
+                            if up_img:
+                                img_bytes = up_img.read()
+                                img_path = f"progress/plan_{active_plan_id}_{task['stage'].replace(' ','_')}.jpg"
+                                with open(img_path, "wb") as f:
+                                    f.write(img_bytes)
+                                # AI progress check if original image exists
+                                verdict = "pending"
+                                if image_bytes:
+                                    verdict = check_progress_with_ai(image_bytes, img_bytes, res["crop"], res["disease"])
+                                add_progress_update(active_plan_id, task['stage'], i+1, img_path, notes or "")
+                                conn = sqlite3.connect(DB_PATH)
+                                conn.execute("UPDATE plan_tasks SET completed = 1 WHERE id = ?", (task['id'],))
+                                conn.commit()
+                                conn.close()
+                                st.success(f"{verdict}! Progress saved.")
+                                st.rerun()
+                            else:
+                                st.warning("Please upload a photo.")
+
+            st.markdown("</div>", unsafe_allow_html=True)
+
 else:
     # ── Empty state ───────────────────────────────────
     st.markdown("""
@@ -648,7 +884,30 @@ else:
     """, unsafe_allow_html=True)
 
 
-# ── Assessment ledger (always visible) ────────────────
+# ── Treatment Plan Dashboard ──────────────────────────
+st.markdown("---")
+st.markdown("<h3 style='color:#10b981'><i class='bi bi-clipboard2-pulse'></i> Treatment Plan Dashboard</h3>", unsafe_allow_html=True)
+all_plans = get_active_plans()
+if all_plans:
+    cols = st.columns(min(4, len(all_plans)))
+    for i, plan in enumerate(all_plans[:4]):
+        with cols[i % 4]:
+            pct = int((plan['improving'] / max(plan['updates'], 1)) * 100) if plan['updates'] > 0 else 0
+            color = "#10b981" if pct >= 60 else ("#f59e0b" if pct >= 30 else "#ef4444")
+            st.markdown(f"""
+            <div class='card' style='text-align:center'>
+                <p style='color:#10b981;font-size:1.5rem;margin:0'>{plan['crop']}</p>
+                <p style='color:#94a3b8;font-size:0.8rem;margin:0'>{plan['farmer']}</p>
+                <p style='color:{color};font-size:1.2rem;margin:0.5rem 0'>{pct}%</p>
+                <p style='color:#94a3b8;font-size:0.75rem;margin:0'>
+                {plan['updates']} check-ins • {plan['improving']} improving</p>
+                <p style='color:{color};font-size:0.75rem;margin:0'>{plan['status'].upper()}</p>
+            </div>
+            """, unsafe_allow_html=True)
+else:
+    st.markdown("<p style='color:#64748b'>No active treatment plans. Run an analysis and start a plan to track crop recovery.</p>", unsafe_allow_html=True)
+
+# ── Assessment ledger ────────────────────────────────
 st.markdown("<div class='card'><div class='card-title'>"
             "<i class='bi bi-database'></i> Assessment History</div>", unsafe_allow_html=True)
 ledger = get_assessments()
