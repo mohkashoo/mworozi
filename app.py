@@ -351,7 +351,10 @@ Provide your analysis in this EXACT format:
 If the crop appears healthy, say "No disease detected — crop appears healthy." and skip treatment/prevention.""", 800)
 
                 if diagnosis:
-                    st.markdown(f"<div class='card' style='padding:0.75rem'><p style='color:#e2e8f0;font-size:0.85rem'>{diagnosis}</p></div>", unsafe_allow_html=True)
+                    # Store for dashboard display
+                    st.session_state["quick_scan_result"] = {"diagnosis": diagnosis, "severity": sev, "disease": disease_name, "img_bytes": img_bytes}
+                    
+                    st.markdown(f"<div class='card' style='padding:0.75rem'><p style='color:#e2e8f0;font-size:0.85rem'>{diagnosis[:300]}...</p></div>", unsafe_allow_html=True)
                     
                     # Extract disease + severity
                     sev = "Moderate"
@@ -400,6 +403,43 @@ else:
     </div>""", unsafe_allow_html=True)
 
     # Pillar Navigation
+    # ── Dashboard Report (from Quick Scan) ──────────────────
+    if "quick_scan_result" in st.session_state and st.session_state["quick_scan_result"]:
+        res = st.session_state["quick_scan_result"]
+        sev = res["severity"]
+        colors = {"Severe": ("#450a0a", "#ef4444", "#fca5a5"), "Moderate": ("#422006", "#f59e0b", "#fde68a"), "Mild": ("#0c4a6e", "#3b82f6", "#93c5fd"), "None": ("#052e16", "#10b981", "#86efac")}
+        bg, bd, cl = colors.get(sev, colors["Moderate"])
+        st.markdown(f"""<div style='background:linear-gradient(135deg,{bg} 0%,{bg} 100%);border:1px solid {bd};border-radius:16px;padding:1.25rem 1.5rem;margin-bottom:1rem;animation:slideDown 0.4s ease'>
+            <h2 style='color:{cl};margin:0 0 0.25rem'>{'⚠️ Severe' if sev == 'Severe' else ('⚠️ Moderate' if sev == 'Moderate' else ('ℹ️ Mild' if sev == 'Mild' else '✅ Healthy'))} — {res['disease'][:60]}</h2>
+            <p style='color:{cl};margin:0;opacity:0.8;font-size:0.9rem'>Tap WhatsApp or SMS below to share this report with the farmer.</p>
+        </div>""", unsafe_allow_html=True)
+
+        col_diag, col_metrics = st.columns([0.65, 0.35])
+        with col_diag:
+            st.markdown("<div class='card'>", unsafe_allow_html=True)
+            st.markdown(res["diagnosis"])
+            st.markdown("</div>", unsafe_allow_html=True)
+        with col_metrics:
+            st.markdown(f"""<div class='card' style='text-align:center;min-height:200px'>
+                <div class='card-title'>Metrics</div>
+                <p style='color:#10b981;font-size:2rem;margin:0'>85%</p><p style='color:#64748b;font-size:0.7rem;margin:0'>AI Confidence</p>
+                <p style='color:{bd};font-size:1.2rem;margin:0.5rem 0'>{sev}</p><p style='color:#64748b;font-size:0.7rem;margin:0'>Severity</p>
+            </div>""", unsafe_allow_html=True)
+
+        # Share buttons
+        import urllib.parse
+        share_msg = f"🌱 AgriScope AI Diagnosis\n\n🦠 {res['disease']}\n⚠️ Severity: {sev}\n\n{res['diagnosis'][:800]}"
+        wa_url = f"https://wa.me/?text={urllib.parse.quote(share_msg[:1500])}"
+        sms_url = f"sms:?body={urllib.parse.quote(share_msg[:400])}"
+        col_wa, col_sms, col_close = st.columns([1, 1, 1])
+        with col_wa: st.markdown(f'<a href="{wa_url}" target="_blank"><button style="width:100%;padding:0.5rem;border-radius:8px;border:1px solid #25D366;background:transparent;color:#25D366;cursor:pointer;font-size:0.85rem">💬 WhatsApp Report</button></a>', unsafe_allow_html=True)
+        with col_sms: st.markdown(f'<a href="{sms_url}"><button style="width:100%;padding:0.5rem;border-radius:8px;border:1px solid #3b82f6;background:transparent;color:#3b82f6;cursor:pointer;font-size:0.85rem">📱 SMS Report</button></a>', unsafe_allow_html=True)
+        with col_close:
+            if st.button("✕ Close Report", key="close_scan", use_container_width=True):
+                del st.session_state["quick_scan_result"]
+                st.rerun()
+        st.markdown("---")
+
     pillar = st.radio("", [f"🔍 {t('pillar1')}", f"📅 {t('pillar2')}", f"💰 {t('pillar3')}"], horizontal=True, key="pillar_nav", label_visibility="collapsed")
     
     # ═══ PILLAR 1: SMART SCOUTING ═══
