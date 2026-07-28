@@ -1013,7 +1013,7 @@ if analyze_btn:
             st.warning(f"Gemini analysis had an issue: {result['error']}. Showing best available data.")
 
         # Check if it's a demo image or real
-        is_real = ("Take Photo" in img_source or "Upload" in img_source) if 'img_source' in dir() else False
+        is_real = img_source != t("img_options")[2]  # Not demo = real photo
 
         sev = result.get("severity", "Unknown")
         disease = result.get("disease", "See analysis")
