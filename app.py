@@ -749,27 +749,31 @@ if st.session_state.get("analysis_done"):
         if res["treatment"]:
             st.markdown(res["treatment"])
 
-            # Voice — browser Speech Synthesis via HTML component (bypasses CSP)
-            voice_text = res["treatment"].replace("`", "'").replace("$", "").replace("\\", "")[:600]
-            voice_lang = {"English": "en", "Kinyarwanda": "rw", "Swahili": "sw", "French": "fr"}.get(res.get("language", "English"), "en")
-            voice_html = f"""
-            <div style="margin-top:0.75rem">
-                <button onclick="speakNow()" style="width:100%;padding:0.6rem;border-radius:8px;border:1px solid #10b981;background:transparent;color:#10b981;cursor:pointer;font-size:0.9rem">
-                    🔊 Listen — Hear Treatment in {res.get("language", "English")}
-                </button>
-            </div>
-            <script>
-            function speakNow() {{
-                var msg = new SpeechSynthesisUtterance();
-                msg.text = `{voice_text}`;
-                msg.lang = '{voice_lang}';
-                msg.rate = 0.9;
-                window.speechSynthesis.cancel();
-                window.speechSynthesis.speak(msg);
-            }}
-            </script>
-            """
-            st.components.v1.html(voice_html, height=60)
+            # Voice — gTTS (better quality, cached to disk for instant replay)
+            voice_text = res["treatment"].replace("##", "").replace("*", "")[:800]
+            voice_lang_code = {"English": "en", "Kinyarwanda": "rw", "Swahili": "sw", "French": "fr"}.get(res.get("language", "English"), "en")
+            voice_key = f"voice_{res['crop']}_{res['severity']}_{res.get('language', 'English')}"
+            voice_path = f"progress/{voice_key}.mp3"
+
+            # Check if cached
+            voice_ready = os.path.exists(voice_path)
+
+            if voice_ready:
+                with open(voice_path, "rb") as f:
+                    st.audio(f.read(), format="audio/mp3")
+                st.markdown(f"<span style='color:#10b981;font-size:0.85rem'>Audio ready — click play above</span>", unsafe_allow_html=True)
+            else:
+                if st.button("Generate Audio (Listen to Treatment)", key="voice_btn", use_container_width=True):
+                    with st.spinner("Generating audio…"):
+                        try:
+                            from gtts import gTTS
+                            tts = gTTS(text=voice_text, lang=voice_lang_code, slow=False)
+                            tts.save(voice_path)
+                            with open(voice_path, "rb") as f:
+                                st.audio(f.read(), format="audio/mp3")
+                            st.success("Audio generated. Play above or click again later.")
+                        except Exception as e:
+                            st.warning(f"Could not generate audio: {e}")
         else:
             st.markdown("*No analysis available. Please try again with a clearer image.*")
 
