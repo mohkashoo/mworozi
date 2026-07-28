@@ -749,29 +749,39 @@ if st.session_state.get("analysis_done"):
         if res["treatment"]:
             st.markdown(res["treatment"])
 
-            # Voice — gTTS (better quality, cached to disk for instant replay)
+            # Voice — gTTS with speed control
             voice_text = res["treatment"].replace("##", "").replace("*", "")[:800]
             voice_lang_code = {"English": "en", "Kinyarwanda": "rw", "Swahili": "sw", "French": "fr"}.get(res.get("language", "English"), "en")
             voice_key = f"voice_{res['crop']}_{res['severity']}_{res.get('language', 'English')}"
             voice_path = f"progress/{voice_key}.mp3"
 
-            # Check if cached
-            voice_ready = os.path.exists(voice_path)
-
-            if voice_ready:
+            if os.path.exists(voice_path):
+                import base64
                 with open(voice_path, "rb") as f:
-                    st.audio(f.read(), format="audio/mp3")
-                st.markdown(f"<span style='color:#10b981;font-size:0.85rem'>Audio ready — click play above</span>", unsafe_allow_html=True)
+                    b64 = base64.b64encode(f.read()).decode()
+                speed_html = f"""
+                <div style="margin-top:0.75rem">
+                    <audio id="humuraAudio" controls style="width:100%;height:40px">
+                        <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
+                    </audio>
+                    <div style="display:flex;gap:0.5rem;margin-top:0.4rem;align-items:center">
+                        <span style="color:#64748b;font-size:0.8rem">Speed:</span>
+                        <button onclick="document.getElementById('humuraAudio').playbackRate=0.75" style="padding:0.15rem 0.6rem;border-radius:4px;border:1px solid #334155;background:transparent;color:#94a3b8;cursor:pointer;font-size:0.8rem">0.75x</button>
+                        <button onclick="document.getElementById('humuraAudio').playbackRate=1.0;this.style.borderColor='#10b981';this.style.color='#10b981'" style="padding:0.15rem 0.6rem;border-radius:4px;border:1px solid #10b981;background:transparent;color:#10b981;cursor:pointer;font-size:0.8rem">1x</button>
+                        <button onclick="document.getElementById('humuraAudio').playbackRate=1.25" style="padding:0.15rem 0.6rem;border-radius:4px;border:1px solid #334155;background:transparent;color:#94a3b8;cursor:pointer;font-size:0.8rem">1.25x</button>
+                        <button onclick="document.getElementById('humuraAudio').playbackRate=1.5" style="padding:0.15rem 0.6rem;border-radius:4px;border:1px solid #334155;background:transparent;color:#94a3b8;cursor:pointer;font-size:0.8rem">1.5x</button>
+                    </div>
+                </div>
+                """
+                st.components.v1.html(speed_html, height=100)
             else:
-                if st.button("Generate Audio (Listen to Treatment)", key="voice_btn", use_container_width=True):
+                if st.button("Generate Audio", key="voice_btn", use_container_width=True):
                     with st.spinner("Generating audio…"):
                         try:
                             from gtts import gTTS
                             tts = gTTS(text=voice_text, lang=voice_lang_code, slow=False)
                             tts.save(voice_path)
-                            with open(voice_path, "rb") as f:
-                                st.audio(f.read(), format="audio/mp3")
-                            st.success("Audio generated. Play above or click again later.")
+                            st.rerun()
                         except Exception as e:
                             st.warning(f"Could not generate audio: {e}")
         else:
