@@ -907,10 +907,12 @@ st.markdown("---")
 # ══════════════════════════════════════════════════════════
 with st.sidebar:
     st.markdown("### 🌐 Language / Ururimi / Lugha / Langue", unsafe_allow_html=True)
-    ui_lang = st.selectbox("Site Language", list(LANGUAGES.keys()), key="ui_lang_sel",
-                           on_change=lambda: st.session_state.__setitem__("ui_language", st.session_state.ui_lang_sel))
-    if ui_lang and ui_lang != st.session_state.get("ui_language"):
-        st.session_state["ui_language"] = ui_lang
+    current_lang = st.session_state.get("ui_language", "English")
+    idx = list(LANGUAGES.keys()).index(current_lang) if current_lang in LANGUAGES else 0
+    selected = st.selectbox("Site Language", list(LANGUAGES.keys()), index=idx, key="lang_switch")
+    if selected != current_lang:
+        st.session_state["ui_language"] = selected
+        st.rerun()
     st.markdown("---")
     st.markdown(f"### <i class='bi bi-person-badge'></i> {t('farmer_info')}", unsafe_allow_html=True)
 
