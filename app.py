@@ -880,11 +880,11 @@ with c1:
                 "<i class='bi bi-tree-fill'></i></h1>", unsafe_allow_html=True)
 with c2:
     st.markdown(
-        "<h1 style='margin:0;font-size:1.5rem'>MWOROZI</h1>"
-        "<p style='margin:0;color:#64748b;font-size:0.85rem'>"
-        "<i class='bi bi-cloud-sun'></i> {t('app_subtitle')}  •  "
-        "<span style='color:#10b981'><i class='bi bi-globe2'></i> "
-        "{t('app_region')}</span></p>",
+        f"<h1 style='margin:0;font-size:1.5rem'>MWOROZI</h1>"
+        f"<p style='margin:0;color:#64748b;font-size:0.85rem'>"
+        f"<i class='bi bi-cloud-sun'></i> {t('app_subtitle')}  •  "
+        f"<span style='color:#10b981'><i class='bi bi-globe2'></i> "
+        f"{t('app_region')}</span></p>",
         unsafe_allow_html=True,
     )
 
