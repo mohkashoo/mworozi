@@ -29,7 +29,7 @@ Farmer uploads/takes crop photo -> Gemini Vision analyzes for disease
 | Auto-Detect Crop | Select "Other (let AI detect)" and Gemini identifies the crop type from the photo |
 | Demo Samples | Pre-loaded disease cases (Maize Blight, Cassava Mosaic Virus, Tomato Late Blight) for offline demonstration |
 | Site-Wide Language Toggle | Switch the entire UI between English, Kinyarwanda, Swahili, and French -- sidebar, buttons, alerts, headings all translate instantly |
-| Voice Playback | gTTS reads treatment aloud in the farmer's language with speed control (0.75x, 1x, 1.25x, 1.5x). Kinyarwanda falls back to Swahili voice |
+| Voice Playback | gTTS reads treatment aloud in the farmer's language with browser-native speed control. Kinyarwanda falls back to Swahili voice |
 | Smart Treatment Plans | Two types: Recovery Checklist (diseased plants) and Keep It Healthy Checklist (disease prevention) |
 | Chat-Style Progress | Each plant gets a dedicated chat view. Upload photos, add notes, AI replies with analysis |
 | AI Progress Tracking | Gemini Vision compares original assessment photo against follow-up photos, classifying: improving, stable, or worsening |
@@ -52,7 +52,7 @@ Farmer uploads/takes crop photo -> Gemini Vision analyzes for disease
 | UI/UX | Custom CSS + Inter font + Bootstrap Icons | Animations, gradients, hover effects, translations |
 | AI Vision | Gemini 3.6-flash | Disease detection + auto crop identification from photos |
 | AI Comparison | Gemini 3.6-flash | Before/after image analysis for progress tracking |
-| Voice | gTTS | Text-to-speech with speed control (0.75x - 1.5x) |
+| Voice | gTTS | Text-to-speech in farmer's language, cached locally for replay |
 | Database | SQLite + Pandas | Assessments, treatment plans, progress records |
 | Image Generation | Pillow | Synthetic diseased leaf images for demo |
 | Translation | Built-in dict system | Full site UI in EN, RW, SW, FR |
