@@ -20,12 +20,6 @@ DB_PATH = "agri.db"
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
-# Twilio WhatsApp (free sandbox tier)
-TWILIO_SID = os.getenv("TWILIO_SID", "")
-TWILIO_TOKEN = os.getenv("TWILIO_TOKEN", "")
-TWILIO_WHATSAPP = os.getenv("TWILIO_WHATSAPP", "+14637242528")
-TWILIO_ACTIVE = bool(TWILIO_SID and TWILIO_TOKEN)
-
 LANGUAGES = {
     "English": "en",
     "Kinyarwanda": "rw",
@@ -284,23 +278,6 @@ def get_weather(location: str) -> dict:
     return {"temp": "?", "humidity": "?", "rain": 0, "code": 0, "rain_prob": 0, "tomorrow_temp": 0}
 
 WEATHER_ICONS = {0: "☀️", 1: "🌤️", 2: "⛅", 3: "☁️", 45: "🌫️", 51: "🌦️", 61: "🌧️", 80: "🌦️", 95: "⛈️"}
-
-# ── Twilio WhatsApp Send ───────────────────────────────
-def send_whatsapp(to_number: str, message: str) -> bool:
-    """Send WhatsApp message via Twilio."""
-    if not TWILIO_ACTIVE:
-        return False
-    try:
-        from twilio.rest import Client
-        client = Client(TWILIO_SID, TWILIO_TOKEN)
-        client.messages.create(
-            from_=f"whatsapp:{TWILIO_WHATSAPP}",
-            body=message[:1600],
-            to=f"whatsapp:{to_number}"
-        )
-        return True
-    except Exception:
-        return False
 
 # ---------------------------------------------------------------------------
 # Page config
@@ -1288,30 +1265,33 @@ if st.session_state.get("analysis_done"):
     </div>
     """, unsafe_allow_html=True)
 
-    # ── Share & Export ──────────────────────────────────
-    share_text = f"Mworozi AI Diagnosis%0A%0ACrop: {res['crop']}%0ADisease: {res['disease']}%0ASeverity: {res['severity']}%0A%0ATreatment: {res.get('treatment','')[:200].replace('##','').replace('*','')}"
-    wa_url = f"https://wa.me/?text={share_text[:800]}"
-    col_share, col_csv, col_twilio = st.columns([1, 1, 1])
-    with col_share:
-        st.markdown(f'<a href="{wa_url}" target="_blank"><button style="width:100%;padding:0.5rem;border-radius:8px;border:1px solid #25D366;background:transparent;color:#25D366;cursor:pointer;font-size:0.85rem">💬 Share via WhatsApp</button></a>', unsafe_allow_html=True)
+    # ── Share Report (brief, all languages) ─────────────
+    st.markdown("<div class='card'><div class='card-title'>Share Report</div>", unsafe_allow_html=True)
+    
+    share_lang = st.selectbox("Report language:", list(LANGUAGES.keys()), 
+                              index=list(LANGUAGES.keys()).index(res.get('language', 'English')) if res.get('language', 'English') in LANGUAGES else 0, key="share_lang")
+    
+    # Brief share text
+    brief = f"Crop: {res['crop']}\nDisease: {res['disease']}\nSeverity: {res['severity']}\n\nTreatment: {res.get('treatment','')[:300].replace('##','').replace('*','')}"
+    
+    if share_lang != "English" and gemini_client:
+        with st.spinner(f"Translating to {share_lang}..."):
+            translated = ask_gemini(f"Translate this brief crop diagnosis into {share_lang}. Keep it concise. Only translate the words:\n\n{brief}", 500)
+            if translated: brief = translated
+    
+    import urllib.parse
+    wa_url = f"https://wa.me/?text={urllib.parse.quote(brief[:1200])}"
+    sms_url = f"sms:?body={urllib.parse.quote(brief[:400])}"
+    
+    col_wa, col_sms, col_csv = st.columns([1, 1, 1])
+    with col_wa:
+        st.markdown(f'<a href="{wa_url}" target="_blank"><button style="width:100%;padding:0.5rem;border-radius:8px;border:1px solid #25D366;background:transparent;color:#25D366;cursor:pointer;font-size:0.85rem">💬 WhatsApp</button></a>', unsafe_allow_html=True)
+    with col_sms:
+        st.markdown(f'<a href="{sms_url}"><button style="width:100%;padding:0.5rem;border-radius:8px;border:1px solid #3b82f6;background:transparent;color:#3b82f6;cursor:pointer;font-size:0.85rem">📱 SMS</button></a>', unsafe_allow_html=True)
     with col_csv:
-        import io as csv_io
-        buf = csv_io.StringIO()
-        buf.write("Field,Value\n")
-        for k,v in [("Crop",res['crop']),("Disease",res['disease']),("Severity",res['severity']),("Farmer",res['farmer']),("Location",res['location'])]:
-            buf.write(f"{k},{v}\n")
-        st.download_button("📥 Download Report", buf.getvalue().encode(), f"mworozi_{res['farmer']}_{res['crop']}.csv", "text/csv", key="report_csv", use_container_width=True)
-    with col_twilio:
-        if TWILIO_ACTIVE:
-            phone = st.text_input("Farmer's WhatsApp", placeholder="+2507XXXXXXXX", key="wa_phone")
-            if st.button("📲 Send via WhatsApp", key="wa_send", use_container_width=True) and phone:
-                msg = f"🌱 Mworozi AI Diagnosis\n\nCrop: {res['crop']}\nDisease: {res['disease']}\nSeverity: {res['severity']}\n\nTreatment: {res.get('treatment','')[:300].replace('##','').replace('*','')}"
-                if send_whatsapp(phone, msg):
-                    st.success(f"Diagnosis sent to {phone}!")
-                else:
-                    st.error("Could not send. Check Twilio credentials.")
-        else:
-            st.markdown("<span style='color:#64748b;font-size:0.75rem'>Twilio not configured</span>", unsafe_allow_html=True)
+        st.download_button("📥 Download", brief.encode(), f"mworozi_report.txt", "text/plain", key="report_txt", use_container_width=True)
+    
+    st.markdown("</div>", unsafe_allow_html=True)
 
     # ── Start Checklist Button ─────────────────────────
     if res["severity"] != "None":
