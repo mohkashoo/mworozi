@@ -26,6 +26,202 @@ LANGUAGES = {
     "French": "fr",
 }
 
+T = {
+    "English": {
+        "app_title": "MWOROZI",
+        "app_subtitle": "AI Crop Health Assistant",
+        "app_region": "Rwanda / East Africa",
+        "farmer_info": "Farmer Info",
+        "farmer_name": "Farmer's Name",
+        "sector": "Sector / Village",
+        "crop_type": "Crop Type",
+        "response_lang": "Response Language",
+        "resources": "Farming Resources",
+        "resources_options": ["Both (Organic + Chemical)", "Organic Only", "Chemical Only"],
+        "season": "Current Season",
+        "season_options": ["Growing Season", "Planting Season", "Harvest Season", "Dry Season"],
+        "save_info": "Save Info",
+        "crop_image": "Crop Image",
+        "img_source": "Image source",
+        "img_options": ["Upload Photo", "Take Photo", "Demo Sample"],
+        "upload_photo": "Upload crop photo",
+        "camera_capture": "Point at the crop and take a photo",
+        "camera_success": "Photo captured from camera",
+        "sample_crop_issue": "Sample Crop Issue",
+        "analyze_btn": "Analyze Crop Health",
+        "gemini_on": "Gemini AI enabled",
+        "gemini_off": "Gemini unavailable — using demo data",
+        "please_name": "Please enter the farmer's name.",
+        "please_img": "Please upload a crop photo or select a demo sample.",
+        "analyzing": "Analyzing crop image with AI…",
+        "severe_title": "Severe Disease Detected",
+        "severe_msg": "Immediate action required",
+        "moderate_title": "Moderate Issue Detected",
+        "moderate_msg": "Treat within the week",
+        "mild_title": "Mild Issue — Monitor",
+        "mild_msg": "Monitor and apply preventive measures",
+        "healthy_title": "Crop Appears Healthy",
+        "healthy_msg": "No disease detected. Continue routine care.",
+        "farmer_details": "Farmer Details",
+        "crop_analysis": "Crop Health Analysis",
+        "ai_confidence": "AI Confidence",
+        "severity_label": "Severity",
+        "season_label": "Season",
+        "start_recovery": "Start Recovery Checklist for This Plant",
+        "keep_healthy_btn": "Keep It Healthy Checklist",
+        "voice_ready": "Audio ready — click play above",
+        "voice_generate": "Generate Audio",
+        "voice_generating": "Generating audio…",
+        "voice_error": "Could not generate audio",
+        "disclaimer": "This analysis is AI-generated and should be verified with a local agricultural extension officer.",
+        "no_analysis": "No analysis available. Please try again with a clearer image.",
+        "back_to_dash": "Back to Dashboard",
+        "recovery_checklist": "Recovery Checklist",
+        "keep_healthy_title": "Keep Healthy Checklist",
+        "current_task": "Current Task",
+        "upload_checkin": "Upload photo for",
+        "notes": "Your notes (what do you see?)",
+        "submit_ai": "Submit & Get AI Analysis",
+        "upload_required": "Please upload a photo so AI can check progress.",
+        "all_done": "All Tasks Complete",
+        "all_done_recovery": "Your plant has recovered. Keep monitoring regularly.",
+        "all_done_healthy": "Your plant is healthy. Continue good practices.",
+        "overall_progress": "Overall Progress",
+        "tasks": "tasks",
+        "check_progress": "Check Progress — All Assessments",
+        "check_progress_desc": "Select an assessment below to start or continue a recovery checklist for that plant.",
+        "continue_btn": "Continue",
+        "treat_btn": "Treat This Plant",
+        "keep_healthy_row": "Keep Healthy",
+        "no_assessments": "No assessments yet. Run an analysis to populate the history.",
+        "welcome_title": "Welcome to Mworozi",
+        "welcome_desc": "Upload a photo of your crop to detect diseases, get treatment recommendations, and receive prevention advice — all in your language.",
+        "dashboard": "Dashboard",
+        "check_progress_nav": "Check Progress",
+        "assessment_history": "Assessment History",
+        "no_assessments_yet": "No assessments yet. Upload a crop photo to get started.",
+    },
+    "Kinyarwanda": {
+        "app_title": "MWOROZI",
+        "app_subtitle": "Umufasha w'ubuhinzi ukoresha AI",
+        "app_region": "Rwanda / Afurika y'Iburasirazuba",
+        "farmer_info": "Amakuru y'umuhinzi",
+        "farmer_name": "Izina ry'umuhinzi",
+        "sector": "Umurenge / Akagari",
+        "crop_type": "Ubwoko bw'igihingwa",
+        "response_lang": "Ururimi rw'ibisubizo",
+        "resources": "Uburyo bwo guhinga",
+        "resources_options": ["Byombi (Organic + Chimique)", "Organic Gusa", "Chimique Gusa"],
+        "season": "Igihe cy'ihinga",
+        "season_options": ["Igihe cyo guhinga", "Igihe cyo gutera", "Igihe cyo gusarura", "Igihe cy'izuba"],
+        "save_info": "Bika Amakuru",
+        "crop_image": "Ifoto y'igihingwa",
+        "img_source": "Aho ifoto ituruka",
+        "img_options": ["Shyira Ifoto", "Fotora", "Igerageza"],
+        "upload_photo": "Shyira ifoto y'igihingwa",
+        "camera_capture": "Fotora igihingwa",
+        "camera_success": "Ifoto yafashwe",
+        "sample_crop_issue": "Igerageza ku ndwara",
+        "analyze_btn": "Suzuma Ubuzima bw'igihingwa",
+        "gemini_on": "Gemini AI irakora",
+        "gemini_off": "Gemini ntabwo iboneka — dukoresha igerageza",
+        "please_name": "Andika izina ry'umuhinzi.",
+        "please_img": "Shyira ifoto y'igihingwa cyangwa hitamo igerageza.",
+        "analyzing": "AI irimo gusuzuma ifoto…",
+        "severe_title": "Indwara Ikomeye Yabonetse",
+        "severe_msg": "Hakenewe igikorwa cyihuse",
+        "moderate_title": "Ikibazo Giciriritse Cyabonetse",
+        "moderate_msg": "Vura mu cyumweru kimwe",
+        "mild_title": "Ikibazo Cyoroshye — Kora Ubigenzura",
+        "mild_msg": "Kora ubigenzura kandi ukore uburyo bwo kwirinda",
+        "healthy_title": "Igihingwa Kigaragara Nk'icyizima",
+        "healthy_msg": "Nta ndwara yabonetse. Komeza kwita ku gihingwa.",
+        "farmer_details": "Amakuru y'umuhinzi",
+        "crop_analysis": "Isesengura ry'ubuzima bw'igihingwa",
+        "ai_confidence": "Icyizere cya AI",
+        "severity_label": "Ubukana",
+        "season_label": "Igihe",
+        "start_recovery": "Tangira Gahunda yo Kuvura iki gihingwa",
+        "keep_healthy_btn": "Gahunda yo Kukomeza Ubuzima Bwiza",
+        "voice_ready": "Amajwi araboneka — kanda gukina hejuru",
+        "voice_generate": "Kora Amajwi",
+        "voice_generating": "Gukora amajwi…",
+        "voice_error": "Ntibishoboka gukora amajwi",
+        "disclaimer": "Ibi byatanzwe na AI bigomba kugenzurwa n'umujyanama w'ubuhinzi.",
+        "no_analysis": "Nta s analytical ibonetse. Ongera ugerageze n'ifoto nziza.",
+        "back_to_dash": "Subira ku Ntangiriro",
+        "recovery_checklist": "Urutonde rwo Kuvura",
+        "keep_healthy_title": "Gahunda yo Gukomeza Ubuzima Bwiza",
+        "current_task": "Igikorwa Kiriho",
+        "upload_checkin": "Shyira ifoto ya",
+        "notes": "Ibyo ubona (wandike hano):",
+        "submit_ai": "Ohereza & AI isuzume",
+        "upload_required": "Shyira ifoto kugira ngo AI igenzure aho bigeze.",
+        "all_done": "Ibikorwa Byose Birangiye",
+        "all_done_recovery": "Igihingwa cyawe cyakize. Komeza kugenzura buri gihe.",
+        "all_done_healthy": "Igihingwa cyawe ni cyiza. Komeza gukora neza.",
+        "overall_progress": "Iterambere Rusange",
+        "tasks": "ibikorwa",
+        "check_progress": "Reba Iterambere — Isesengura Ryose",
+        "check_progress_desc": "Hitamo is analytical hepfo kugira ngo utangire cyangwa ukomeze gahunda yo kuvura icyo gihingwa.",
+        "continue_btn": "Komeza",
+        "treat_btn": "Vura iki Gihingwa",
+        "keep_healthy_row": "Komeza Ubuzima Bwiza",
+        "no_assessments": "Nta s analytical zikiriho. Tangira isesengura kugira ngo ubike amateka.",
+        "welcome_title": "Murakaza neza kuri Mworozi",
+        "welcome_desc": "Shyira ifoto y'igihingwa cyawe kugira ngo AI imenye indwara, igutangire uburyo bwo kuvura, n'inama zo kwirinda — byose mu rurimi rwawe.",
+        "dashboard": "Inshuro ya Mbere",
+        "check_progress_nav": "Reba Iterambere",
+        "assessment_history": "Amateka y'Isesengura",
+        "no_assessments_yet": "Nta s analytical zikiriho. Shyira ifoto y'igihingwa kugira ngo utangire.",
+    },
+}
+# Swahili and French inherit English as fallback
+T["Swahili"] = {
+    **T["English"],
+    "app_title": "MWOROZI",
+    "app_subtitle": "Msaidizi wa Kilimo wa AI",
+    "app_region": "Afrika Mashariki",
+    "farmer_info": "Taarifa za Mkulima",
+    "farmer_name": "Jina la Mkulima",
+    "save_info": "Hifadhi Taarifa",
+    "analyze_btn": "Chambua Afya ya Mmea",
+    "welcome_title": "Karibu Mworozi",
+    "welcome_desc": "Pakia picha ya mmea wako ili AI itambue magonjwa na kukupa ushauri wa matibabu — yote kwa lugha yako.",
+    "dashboard": "Dashibodi",
+    "check_progress_nav": "Angalia Maendeleo",
+    "assessment_history": "Historia ya Uchambuzi",
+    "start_recovery": "Anza Mpango wa Matibabu",
+    "recovery_checklist": "Orodha ya Matibabu",
+    "keep_healthy_title": "Endelea Kuwa na Afya",
+    "all_done_recovery": "Mmea wako umepona. Endelea kufuatilia.",
+    "no_assessments": "Hakuna uchambuzi bado. Pakia picha ya mmea ili kuanza.",
+}
+T["French"] = {
+    **T["English"],
+    "app_title": "MWOROZI",
+    "app_subtitle": "Assistant Agricole IA",
+    "app_region": "Rwanda / Afrique de l'Est",
+    "farmer_info": "Info Agriculteur",
+    "farmer_name": "Nom de l'agriculteur",
+    "sector": "Secteur / Village",
+    "save_info": "Enregistrer",
+    "analyze_btn": "Analyser la Santé de la Culture",
+    "welcome_title": "Bienvenue sur Mworozi",
+    "welcome_desc": "Téléchargez une photo de votre culture pour détecter les maladies et obtenir des recommandations de traitement — dans votre langue.",
+    "dashboard": "Tableau de Bord",
+    "check_progress_nav": "Voir les Progrès",
+    "assessment_history": "Historique des Analyses",
+    "start_recovery": "Commencer le Plan de Traitement",
+    "recovery_checklist": "Liste de Traitement",
+    "all_done_recovery": "Votre plante a récupéré. Continuez à surveiller.",
+    "no_assessments": "Aucune analyse pour le moment. Téléchargez une photo pour commencer.",
+}
+
+def t(key: str) -> str:
+    lang = st.session_state.get("ui_language", "English")
+    return T.get(lang, T["English"]).get(key, T["English"].get(key, key))
+
 # Common crops in Rwanda / East Africa
 CROPS = [
     "Maize", "Beans", "Cassava", "Sweet Potato", "Irish Potato",
@@ -668,9 +864,11 @@ init_db()
 init_treatment_db()
 
 # ── Session state ─────────────────────────────────────────
-for key in ("analysis_done", "last_result", "treatment_view"):
+for key in ("analysis_done", "last_result", "treatment_view", "ui_language"):
     if key not in st.session_state:
         st.session_state[key] = None if key != "analysis_done" else False
+if not st.session_state.get("ui_language"):
+    st.session_state["ui_language"] = "English"
 
 # ── CSS ────────────────────────────────────────────────────
 st.markdown(CSS, unsafe_allow_html=True)
@@ -708,23 +906,29 @@ st.markdown("---")
 # SIDEBAR — Farmer info + crop selection
 # ══════════════════════════════════════════════════════════
 with st.sidebar:
-    st.markdown("### <i class='bi bi-person-badge'></i> Farmer Info", unsafe_allow_html=True)
+    st.markdown("### 🌐 Language / Ururimi / Lugha / Langue", unsafe_allow_html=True)
+    ui_lang = st.selectbox("Site Language", list(LANGUAGES.keys()), key="ui_lang_sel",
+                           on_change=lambda: st.session_state.__setitem__("ui_language", st.session_state.ui_lang_sel))
+    if ui_lang and ui_lang != st.session_state.get("ui_language"):
+        st.session_state["ui_language"] = ui_lang
+    st.markdown("---")
+    st.markdown(f"### <i class='bi bi-person-badge'></i> {t('farmer_info')}", unsafe_allow_html=True)
 
     with st.form("farmer_form", clear_on_submit=False):
-        farmer_name = st.text_input("Farmer's Name", placeholder="e.g. Jean", key="farmer_name")
-        location = st.text_input("Sector / Village", placeholder="e.g. Rulindo", key="location")
-        crop = st.selectbox("Crop Type", CROPS, key="crop")
-        language = st.selectbox("Response Language", list(LANGUAGES.keys()), key="language")
-        resource_pref = st.selectbox("Farming Resources", ["Both (Organic + Chemical)", "Organic Only", "Chemical Only"], key="resource_pref")
-        season = st.selectbox("Current Season", ["Growing Season", "Planting Season", "Harvest Season", "Dry Season"], key="season")
-        st.form_submit_button("💾 Save Info", use_container_width=True, type="secondary")
+        farmer_name = st.text_input(t("farmer_name"), placeholder="e.g. Jean", key="farmer_name")
+        location = st.text_input(t("sector"), placeholder="e.g. Rulindo", key="location")
+        crop = st.selectbox(t("crop_type"), CROPS, key="crop")
+        language = st.selectbox(t("response_lang"), list(LANGUAGES.keys()), key="language")
+        resource_pref = st.selectbox(t("resources"), t("resources_options"), key="resource_pref")
+        season = st.selectbox(t("season"), t("season_options"), key="season")
+        st.form_submit_button(t("save_info"), use_container_width=True, type="secondary")
 
     st.markdown("---")
-    st.markdown("### <i class='bi bi-image'></i> Crop Image", unsafe_allow_html=True)
+    st.markdown(f"### <i class='bi bi-image'></i> {t('crop_image')}", unsafe_allow_html=True)
 
     img_source = st.radio(
-        "Image source",
-        ["📁 Upload Photo", "📷 Take Photo", "🧪 Demo Sample"],
+        t("img_source"),
+        t("img_options"),
         key="img_source",
         label_visibility="collapsed",
     )
@@ -733,13 +937,13 @@ with st.sidebar:
     preview = None
     crop_for_demo = crop
 
-    if "Take Photo" in img_source:
-        cam_img = st.camera_input("Point at the crop and take a photo", key="camera_input")
+    if img_source == t("img_options")[1]:
+        cam_img = st.camera_input(t("camera_capture"), key="camera_input")
         if cam_img:
             image_bytes = cam_img.read()
-            st.success("Photo captured from camera")
-    elif "Demo" in img_source:
-        demo_crop = st.selectbox("Sample Crop Issue", list(DEMO_DISEASES.keys()), key="demo_crop")
+            st.success(t("camera_success"))
+    elif img_source == t("img_options")[2]:
+        demo_crop = st.selectbox(t("sample_crop_issue"), list(DEMO_DISEASES.keys()), key="demo_crop")
         crop_for_demo = demo_crop
 
         from PIL import Image, ImageDraw, ImageFont
@@ -778,16 +982,12 @@ with st.sidebar:
 
     st.markdown("---")
 
-    analyze_btn = st.button(
-        "🔍 Analyze Crop Health",
-        type="primary",
-        use_container_width=True,
-    )
+    analyze_btn = st.button(t("analyze_btn"), type="primary", use_container_width=True)
 
     if GEMINI_AVAILABLE:
-        st.markdown("<span style='color:#10b981'><i class='bi bi-cpu'></i> Gemini AI enabled</span>", unsafe_allow_html=True)
+        st.markdown(f"<span style='color:#10b981'><i class='bi bi-cpu'></i> {t('gemini_on')}</span>", unsafe_allow_html=True)
     else:
-        st.markdown("<span style='color:#f59e0b'><i class='bi bi-cpu'></i> Gemini unavailable — using demo data</span>", unsafe_allow_html=True)
+        st.markdown(f"<span style='color:#f59e0b'><i class='bi bi-cpu'></i> {t('gemini_off')}</span>", unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════
 # MAIN AREA
