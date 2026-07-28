@@ -1292,9 +1292,22 @@ if st.session_state.get("analysis_done"):
     """, unsafe_allow_html=True)
 
     # ── Share & Export ──────────────────────────────────
-    share_text = f"Mworozi AI Diagnosis%0A%0ACrop: {res['crop']}%0ADisease: {res['disease']}%0ASeverity: {res['severity']}%0A%0ATreatment: {res.get('treatment','')[:300].replace('##','').replace('*','').replace('\n','%0A')}"
-    wa_url = f"https://wa.me/?text={share_text[:800]}"
-    sms_body = share_text.replace('%0A','\n')[:500]
+    # Build full treatment steps
+    steps_text = ""
+    disease_for_plan = res['disease']
+    for plan_key in TREATMENT_PLANS:
+        if plan_key.lower() in res['disease'].lower() or (res['disease'].lower() in plan_key.lower()):
+            disease_for_plan = plan_key
+            break
+    if disease_for_plan in TREATMENT_PLANS:
+        steps_text = "%0A%0A📋 Recovery Steps:%0A"
+        for stage, task in TREATMENT_PLANS[disease_for_plan]:
+            steps_text += f"%0A  {stage}: {task}"
+
+    share_text = f"🌱 *Mworozi AI Diagnosis*%0A%0A🌾 Crop: {res['crop']}%0A🦠 Disease: {res['disease']}%0A⚠️ Severity: {res['severity']}%0A%0A💊 Treatment:%0A{res.get('treatment','')[:500].replace('##','').replace('*','')}{steps_text}"
+    # URL-encode for the WhatsApp/SMS links
+    wa_url = f"https://wa.me/?text={share_text.replace(chr(10),'%0A')[:1200]}"
+    sms_body = share_text.replace('%0A','\n')[:600]
     import urllib.parse
     sms_url = f"sms:?body={urllib.parse.quote(sms_body[:400])}"
     col_share, col_sms, col_csv = st.columns([1, 1, 1])
