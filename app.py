@@ -871,8 +871,9 @@ if st.session_state.get("analysis_done"):
 
             # Voice — gTTS with speed control
             voice_text = res["treatment"].replace("##", "").replace("*", "")[:800]
-            voice_lang_code = {"English": "en", "Kinyarwanda": "rw", "Swahili": "sw", "French": "fr"}.get(res.get("language", "English"), "en")
-            voice_key = f"voice_{res['crop']}_{res['severity']}_{res.get('language', 'English')}"
+            # Voice — Kinyarwanda falls back to Swahili (gTTS doesn't support 'rw')
+            voice_lang_code = {"English": "en", "Kinyarwanda": "sw", "Swahili": "sw", "French": "fr"}.get(res.get("language", "English"), "en")
+            voice_key = f"voice_{res['crop']}_{res['severity']}_{voice_lang_code}"
             voice_path = f"progress/{voice_key}.mp3"
 
             if os.path.exists(voice_path):
