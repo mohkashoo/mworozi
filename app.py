@@ -1212,6 +1212,20 @@ if st.session_state.get("analysis_done"):
     </div>
     """, unsafe_allow_html=True)
 
+    # ── Share & Export ──────────────────────────────────
+    share_text = f"Mworozi AI Diagnosis%0A%0ACrop: {res['crop']}%0ADisease: {res['disease']}%0ASeverity: {res['severity']}%0A%0ATreatment: {res.get('treatment','')[:200].replace('##','').replace('*','')}"
+    wa_url = f"https://wa.me/?text={share_text[:800]}"
+    col_share, col_csv = st.columns([1, 1])
+    with col_share:
+        st.markdown(f'<a href="{wa_url}" target="_blank"><button style="width:100%;padding:0.5rem;border-radius:8px;border:1px solid #25D366;background:transparent;color:#25D366;cursor:pointer;font-size:0.85rem">💬 Share via WhatsApp</button></a>', unsafe_allow_html=True)
+    with col_csv:
+        import io as csv_io
+        buf = csv_io.StringIO()
+        buf.write("Field,Value\n")
+        for k,v in [("Crop",res['crop']),("Disease",res['disease']),("Severity",res['severity']),("Farmer",res['farmer']),("Location",res['location'])]:
+            buf.write(f"{k},{v}\n")
+        st.download_button("📥 Download Report", buf.getvalue().encode(), f"mworozi_{res['farmer']}_{res['crop']}.csv", "text/csv", key="report_csv", use_container_width=True)
+
     # ── Start Checklist Button ─────────────────────────
     if res["severity"] != "None":
         if st.button(f"🌱 {t('start_recovery')}", key="start_checklist", type="primary", use_container_width=True):
@@ -1382,6 +1396,8 @@ st.markdown(f"<p style='color:#94a3b8;font-size:0.85rem'>{t('check_progress_desc
 
 all_ledger = get_assessments()
 if not all_ledger.empty:
+    csv = all_ledger.to_csv(index=False).encode('utf-8')
+    st.download_button("📥 Download CSV (Excel-ready)", csv, "mworozi_assessments.csv", "text/csv", key="csv_download", use_container_width=True)
     for idx, row in all_ledger.iterrows():
         with st.container():
             c1, c2, c3, c4, c5, c6, c7, c8 = st.columns([1.2, 0.8, 0.9, 0.8, 1, 1, 0.5, 0.5])
