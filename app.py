@@ -1292,6 +1292,20 @@ if st.session_state.get("analysis_done"):
     """, unsafe_allow_html=True)
 
     # ── Share & Export ──────────────────────────────────
+    # Build clean treatment text (strip markdown headers)
+    raw_treatment = res.get('treatment', '')
+    clean_lines = []
+    for line in raw_treatment.split('\n'):
+        line = line.strip()
+        if line.startswith('## ') or line.startswith('**'):
+            line = line.replace('##','').replace('**','').strip()
+            clean_lines.append(f'• {line}')
+        elif line.startswith('-'):
+            clean_lines.append(f'  {line}')
+        elif line and not line.startswith('(') and not line.startswith('If'):
+            clean_lines.append(line)
+    clean_treatment = '\n'.join(clean_lines)[:600]
+
     # Build full treatment steps
     steps_text = ""
     disease_for_plan = res['disease']
@@ -1300,16 +1314,15 @@ if st.session_state.get("analysis_done"):
             disease_for_plan = plan_key
             break
     if disease_for_plan in TREATMENT_PLANS:
-        steps_text = "%0A%0A📋 Recovery Steps:%0A"
+        steps_text = "\n\n📋 Recovery Steps:\n"
         for stage, task in TREATMENT_PLANS[disease_for_plan]:
-            steps_text += f"%0A  {stage}: {task}"
+            steps_text += f"\n  ✅ {stage}: {task}"
 
-    share_text = f"🌱 *Mworozi AI Diagnosis*%0A%0A🌾 Crop: {res['crop']}%0A🦠 Disease: {res['disease']}%0A⚠️ Severity: {res['severity']}%0A%0A💊 Treatment:%0A{res.get('treatment','')[:500].replace('##','').replace('*','')}{steps_text}"
+    share_text = f"🌱 Mworozi AI Diagnosis\n\n🌾 Crop: {res['crop']}\n🦠 Disease: {res['disease']}\n⚠️ Severity: {res['severity']}\n\n💊 Treatment:\n{clean_treatment}{steps_text}"
     # URL-encode for the WhatsApp/SMS links
-    wa_url = f"https://wa.me/?text={share_text.replace(chr(10),'%0A')[:1200]}"
-    sms_body = share_text.replace('%0A','\n')[:600]
     import urllib.parse
-    sms_url = f"sms:?body={urllib.parse.quote(sms_body[:400])}"
+    wa_url = f"https://wa.me/?text={urllib.parse.quote(share_text[:1200])}"
+    sms_url = f"sms:?body={urllib.parse.quote(share_text[:400])}"
     col_share, col_sms, col_csv = st.columns([1, 1, 1])
     with col_share:
         st.markdown(f'<a href="{wa_url}" target="_blank"><button style="width:100%;padding:0.5rem;border-radius:8px;border:1px solid #25D366;background:transparent;color:#25D366;cursor:pointer;font-size:0.85rem">💬 WhatsApp</button></a>', unsafe_allow_html=True)
