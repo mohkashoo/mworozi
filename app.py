@@ -31,6 +31,7 @@ CROPS = [
     "Maize", "Beans", "Cassava", "Sweet Potato", "Irish Potato",
     "Banana", "Coffee", "Tea", "Rice", "Soybean",
     "Tomato", "Cabbage", "Onion", "Sorghum", "Wheat",
+    "Other (let AI detect)",
 ]
 
 # ---------------------------------------------------------------------------
@@ -430,7 +431,36 @@ def analyze_crop(image_bytes: bytes, crop: str, language: str) -> dict:
     lang_code = LANGUAGES.get(language, "en")
     lang_instruction = f"Respond in {language}." if language != "English" else ""
 
-    prompt = f"""You are an expert agricultural extension officer for East Africa. Analyze this {crop} plant/crop image.
+    is_auto_detect = "Other" in crop
+
+    if is_auto_detect:
+        prompt = f"""You are an expert agricultural extension officer for East Africa. First, identify what crop or plant is shown in this image. Then analyze it for diseases, pests, or nutrient deficiencies.
+
+{lang_instruction}
+
+Provide your analysis in this EXACT format:
+
+## Crop
+(Name of the crop/plant you identified in the image.)
+
+## 1. Disease / Issue
+(Name of the disease, pest, or nutrient deficiency affecting this crop.)
+
+## 2. Severity
+(Mild / Moderate / Severe — and a brief explanation why.)
+
+## 3. Recommended Treatment
+(Specific, actionable steps the farmer can take using locally available materials. Include organic options if possible.)
+
+## 4. Prevention
+(How to prevent this in future growing seasons.)
+
+## 5. Expected Yield Impact
+(How much this will affect the harvest if untreated vs treated.)
+
+If the crop appears healthy, say "No disease detected — crop appears healthy." and skip sections 3-5."""
+    else:
+        prompt = f"""You are an expert agricultural extension officer for East Africa. Analyze this {crop} plant/crop image.
 
 {lang_instruction}
 
@@ -467,7 +497,6 @@ If the crop appears healthy, say "No disease detected — crop appears healthy."
 
         # Determine severity from response
         severity = "Moderate"
-        # Look for actual severity keyword in the text (avoid matching section header "## 2. Severity")
         text_lower = text.lower()
         if "**severe**" in text_lower or "severity: severe" in text_lower or text_lower.count("severe") > text_lower.count("severity"):
             severity = "Severe"
@@ -476,21 +505,40 @@ If the crop appears healthy, say "No disease detected — crop appears healthy."
         elif "no disease" in text_lower or "crop appears healthy" in text_lower:
             severity = "None"
 
-        # Extract disease name (first line after ## 1.)
+        # Extract disease name
         disease = "Unknown"
         for line in text.split("\n"):
             if line.strip().startswith("## 1.") or line.strip().startswith("**Disease") or line.strip().startswith("**Issue"):
                 disease = line.split(":", 1)[-1].strip() if ":" in line else line.replace("## 1.", "").replace("**", "").strip()
                 break
+        if disease == "Unknown" and "## 1." in text:
+            disease = text.split("## 1.")[-1].split("\n")[0].strip()
+
+        # Extract auto-detected crop name
+        detected_crop = crop
+        if is_auto_detect:
+            for line in text.split("\n"):
+                clean = line.strip()
+                if clean.startswith("## Crop"):
+                    detected_crop = clean.replace("## Crop", "").strip()
+                    break
+                elif clean.startswith("**Crop") or clean.startswith("* Crop"):
+                    detected_crop = clean.replace("**Crop", "").replace("**", "").replace("* Crop", "").strip()
+                    break
+            if detected_crop == crop:  # Fallback: try first line
+                first_line = text.split("\n")[0].strip()
+                if first_line and len(first_line) < 50:
+                    detected_crop = first_line
 
         return {
-            "disease": disease if disease != "Unknown" else text.split("## 1.")[-1].split("\n")[0].strip() if "## 1." in text else "See analysis",
+            "disease": disease if disease != "Unknown" else "See analysis",
             "severity": severity,
             "treatment": text,
+            "detected_crop": detected_crop,
             "error": None,
         }
     except Exception as exc:
-        return {"disease": "Analysis failed", "severity": "Unknown", "treatment": "", "error": str(exc)}
+        return {"disease": "Analysis failed", "severity": "Unknown", "treatment": "", "detected_crop": crop, "error": str(exc)}
 
 
 # ---------------------------------------------------------------------------
@@ -768,13 +816,14 @@ if analyze_btn:
         sev = result.get("severity", "Unknown")
         disease = result.get("disease", "See analysis")
         treatment = result.get("treatment", "")
+        actual_crop = result.get("detected_crop", crop_sel)
 
         # Save to DB
         try:
             save_assessment({
                 "farmer_name": farmer,
                 "location": loc,
-                "crop": crop_sel,
+                "crop": actual_crop,
                 "disease": disease[:100],
                 "severity": sev,
                 "treatment": treatment[:500],
@@ -785,7 +834,7 @@ if analyze_btn:
 
         # Save original image for later AI progress comparison
         os.makedirs("progress", exist_ok=True)
-        orig_path = f"progress/original_{farmer}_{crop_sel}_{int(time.time())}.jpg"
+        orig_path = f"progress/original_{farmer}_{actual_crop}_{int(time.time())}.jpg"
         with open(orig_path, "wb") as f:
             f.write(image_bytes)
 
@@ -794,7 +843,7 @@ if analyze_btn:
             "disease": disease,
             "severity": sev,
             "treatment": treatment,
-            "crop": crop_sel,
+            "crop": actual_crop,
             "farmer": farmer,
             "location": loc,
             "language": lang,
