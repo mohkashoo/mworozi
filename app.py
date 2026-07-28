@@ -44,73 +44,157 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------------------------
-# Custom CSS — dark agri theme
+# Custom CSS — smooth modern agri theme
 # ---------------------------------------------------------------------------
 CSS = """
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    * { font-family: 'Inter', sans-serif; }
     .bi { vertical-align: -0.125em; }
-    .stApp { background-color: #090a0f; }
+
+    .stApp { background: linear-gradient(180deg, #090a0f 0%, #0d1117 100%); }
     .main > div { padding: 1rem 1.5rem; }
 
+    /* === Cards === */
     .card {
-        background: #0f1520;
-        border: 1px solid #1e293b;
-        border-radius: 12px; padding: 1.25rem; margin-bottom: 1rem;
+        background: linear-gradient(135deg, #0f1520 0%, #0d1117 100%);
+        border: 1px solid #1e293b; border-radius: 16px;
+        padding: 1.25rem; margin-bottom: 0.75rem;
+        transition: all 0.3s ease;
+    }
+    .card:hover {
+        border-color: #10b98133; box-shadow: 0 4px 20px rgba(16, 185, 129, 0.08);
+        transform: translateY(-2px);
     }
     .card-title {
-        font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
-        color: #64748b; margin-bottom: 0.75rem;
+        font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em;
+        color: #64748b; margin-bottom: 0.75rem; font-weight: 600;
     }
 
+    /* === Alerts === */
     .alert-disease {
         background: linear-gradient(135deg, #450a0a 0%, #7f1d1d 100%);
-        border: 1px solid #ef4444; border-radius: 12px;
+        border: 1px solid #ef4444; border-radius: 16px;
         padding: 1.25rem 1.5rem; margin-bottom: 1rem;
+        animation: slideDown 0.4s ease;
     }
-    .alert-disease h2 { color: #fca5a5; margin: 0 0 0.25rem; font-size: 1.25rem; }
+    .alert-disease h2 { color: #fca5a5; margin: 0 0 0.25rem; font-size: 1.25rem; font-weight: 700; }
     .alert-disease p  { color: #fecaca; margin: 0; font-size: 0.9rem; }
 
     .alert-healthy {
         background: linear-gradient(135deg, #052e16 0%, #14532d 100%);
-        border: 1px solid #10b981; border-radius: 12px;
+        border: 1px solid #10b981; border-radius: 16px;
         padding: 1.25rem 1.5rem; margin-bottom: 1rem;
+        animation: slideDown 0.4s ease;
     }
-    .alert-healthy h2 { color: #86efac; margin: 0 0 0.25rem; font-size: 1.25rem; }
+    .alert-healthy h2 { color: #86efac; margin: 0 0 0.25rem; font-size: 1.25rem; font-weight: 700; }
     .alert-healthy p  { color: #bbf7d0; margin: 0; font-size: 0.9rem; }
 
+    @keyframes slideDown {
+        from { opacity: 0; transform: translateY(-10px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeIn {
+        from { opacity: 0; }
+        to   { opacity: 1; }
+    }
+    @keyframes pulse {
+        0%, 100% { transform: scale(1); }
+        50%      { transform: scale(1.05); }
+    }
+    @keyframes gentleBounce {
+        0%, 100% { transform: translateY(0); }
+        50%      { transform: translateY(-6px); }
+    }
+
     .section-label {
-        font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em;
+        font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em;
         color: #64748b; margin: 1.25rem 0 0.5rem; border-bottom: 1px solid #1e293b;
-        padding-bottom: 0.3rem;
+        padding-bottom: 0.3rem; font-weight: 600;
     }
 
-    [data-testid="stSidebar"] { background-color: #0a0d14; border-right: 1px solid #1e293b; }
+    /* === Sidebar === */
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #0a0d14 0%, #080a10 100%);
+        border-right: 1px solid #1e293b;
+    }
+    [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 {
+        color: #e2e8f0; font-weight: 600;
+    }
 
+    /* === Inputs === */
     .stTextInput>div>div>input, .stNumberInput>div>div>input, .stTextArea>div>textarea {
-        background-color: #131a26 !important; border-color: #1e293b !important;
-        color: #e2e8f0 !important;
+        background: #131a26 !important; border: 1px solid #1e293b !important;
+        color: #e2e8f0 !important; border-radius: 10px !important;
+        transition: border-color 0.3s;
     }
-    .stSelectbox>div>div>select { background-color: #131a26 !important; border-color: #1e293b !important; color: #e2e8f0 !important; }
+    .stTextInput>div>div>input:focus, .stTextArea>div>textarea:focus {
+        border-color: #10b981 !important; box-shadow: 0 0 0 2px rgba(16,185,129,0.2) !important;
+    }
+    .stSelectbox>div>div>select {
+        background: #131a26 !important; border: 1px solid #1e293b !important;
+        color: #e2e8f0 !important; border-radius: 10px !important;
+    }
 
+    /* === Buttons === */
+    .stButton > button {
+        border-radius: 12px !important; font-weight: 600 !important;
+        transition: all 0.25s ease !important; letter-spacing: 0.01em;
+    }
     .stButton > button[kind="primary"] {
         background: linear-gradient(135deg, #059669, #10b981) !important;
-        border: none !important; color: white !important; font-weight: 600 !important;
+        border: none !important; color: white !important;
     }
-    .stButton > button:hover {
-        transform: translateY(-1px);
+    .stButton > button[kind="primary"]:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(16, 185, 129, 0.3);
+        filter: brightness(1.1);
+    }
+    .stButton > button[kind="secondary"] {
+        background: transparent !important; border: 1px solid #334155 !important;
+        color: #94a3b8 !important;
+    }
+    .stButton > button[kind="secondary"]:hover {
+        border-color: #10b981 !important; color: #10b981 !important;
+        transform: translateY(-2px); box-shadow: 0 4px 12px rgba(16,185,129,0.15);
     }
 
+    /* === Radio & Segmented Control === */
+    [data-testid="stRadio"] label { color: #94a3b8; }
+    
+    /* === Data === */
     .stDataFrame { background: transparent !important; }
     .stDataFrame td, .stDataFrame th {
         background-color: #0f1520 !important; color: #cbd5e1 !important;
-        border-color: #1e293b !important;
+        border-color: #1e293b !important; padding: 0.5rem 0.75rem !important;
+    }
+    .stDataFrame th { color: #10b981 !important; font-weight: 600 !important; font-size: 0.75rem; }
+    
+    /* === Expander === */
+    .streamlit-expanderHeader {
+        background: #0f1520 !important; border: 1px solid #1e293b !important;
+        border-radius: 12px !important; color: #e2e8f0 !important;
+        transition: all 0.3s;
+    }
+    .streamlit-expanderHeader:hover {
+        border-color: #10b98144 !important;
     }
 
-    hr { border-color: #1e293b !important; }
+    /* === Misc === */
+    hr { border-color: #1e293b !important; opacity: 0.5; }
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: #090a0f; }
     ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #10b981; }
+    
+    /* === Welcome Emoji Animation === */
+    .welcome-icon { animation: gentleBounce 3s ease infinite; display: inline-block; }
+
+    /* === Chat bubble animation === */
+    [style*="border-radius:12px 12px 4px 12px"] {
+        animation: fadeIn 0.3s ease;
+    }
 </style>
 """
 
