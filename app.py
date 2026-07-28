@@ -11,6 +11,7 @@ except ImportError:
 import streamlit as st
 import pandas as pd
 import numpy as np
+import requests
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -247,6 +248,36 @@ CROPS = [
     "Tomato", "Cabbage", "Onion", "Sorghum", "Wheat",
     "Other (let AI detect)",
 ]
+
+# ── Weather API (Open-Meteo — free, no key) ────────────
+RWANDA_COORDS = {"Rulindo": (-1.72, 29.94), "Kigali": (-1.95, 30.10),
+    "Musanze": (-1.50, 29.63), "Rubavu": (-1.68, 29.25), "Huye": (-2.60, 29.74),
+    "Muhanga": (-2.08, 29.75), "Rwamagana": (-1.95, 30.43), "Gicumbi": (-1.62, 30.12),
+}
+
+@st.cache_data(ttl=600)
+def get_weather(location: str) -> dict:
+    """Fetch weather for a location using Open-Meteo free API."""
+    coords = RWANDA_COORDS.get(location, (-1.95, 30.10))
+    try:
+        url = f"https://api.open-meteo.com/v1/forecast?latitude={coords[0]}&longitude={coords[1]}&current=temperature_2m,relative_humidity_2m,rain,weather_code&daily=precipitation_probability_max,temperature_2m_max&timezone=Africa%2FKigali&forecast_days=2"
+        r = requests.get(url, timeout=5)
+        if r.status_code == 200:
+            d = r.json()
+            curr = d.get("current", {})
+            return {
+                "temp": curr.get("temperature_2m", "?"),
+                "humidity": curr.get("relative_humidity_2m", "?"),
+                "rain": curr.get("rain", 0) or 0,
+                "code": curr.get("weather_code", 0),
+                "rain_prob": d.get("daily", {}).get("precipitation_probability_max", [0])[0] if d.get("daily") else 0,
+                "tomorrow_temp": d.get("daily", {}).get("temperature_2m_max", [0])[1] if len(d.get("daily", {}).get("temperature_2m_max", [])) > 1 else 0,
+            }
+    except Exception:
+        pass
+    return {"temp": "?", "humidity": "?", "rain": 0, "code": 0, "rain_prob": 0, "tomorrow_temp": 0}
+
+WEATHER_ICONS = {0: "☀️", 1: "🌤️", 2: "⛅", 3: "☁️", 45: "🌫️", 51: "🌦️", 61: "🌧️", 80: "🌦️", 95: "⛈️"}
 
 # ---------------------------------------------------------------------------
 # Page config
@@ -958,6 +989,27 @@ with st.sidebar:
         st.form_submit_button(t("save_info"), use_container_width=True, type="secondary")
 
     st.markdown("---")
+    
+    # Weather widget
+    loc = st.session_state.get("location", "").strip()
+    if loc:
+        w = get_weather(loc)
+        w_icon = WEATHER_ICONS.get(w.get("code", 0), "🌤️")
+        st.markdown(f"### <i class='bi bi-cloud-sun'></i> Weather — {loc}", unsafe_allow_html=True)
+        st.markdown(f"""
+        <div class='card' style='padding:0.75rem'>
+            <div style='display:flex;justify-content:space-between;align-items:center'>
+                <span style='font-size:1.5rem'>{w_icon} {w['temp']}°C</span>
+                <span style='color:#94a3b8;font-size:0.8rem'>Humidity: {w['humidity']}%</span>
+            </div>
+            <div style='display:flex;justify-content:space-between;margin-top:0.4rem'>
+                <span style='color:#94a3b8;font-size:0.75rem'>Rain prob: {w['rain_prob']}%</span>
+                <span style='color:#64748b;font-size:0.75rem'>Tomorrow: {w['tomorrow_temp']}°C</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    st.markdown("---")
+    
     st.markdown(f"### <i class='bi bi-image'></i> {t('crop_image')}", unsafe_allow_html=True)
 
     img_source = st.radio(
