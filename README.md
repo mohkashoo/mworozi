@@ -24,22 +24,23 @@ Farmer uploads/takes crop photo -> Gemini Vision analyzes for disease
 
 | Feature | Description |
 |---------|-------------|
-| **Disease Detection** | Upload a photo or take one with the camera. Gemini Vision identifies diseases, pests, or nutrient deficiencies |
-| **Three Input Methods** | Camera capture, file upload, or pre-loaded demo samples |
-| **Auto-Detect Crop** | Select "Other (let AI detect)" and Gemini identifies the crop type from the photo |
-| **Demo Samples** | Pre-loaded disease cases (Maize Blight, Cassava Mosaic Virus, Tomato Late Blight) for offline demonstration |
-| **Site-Wide Language Toggle** | Switch the entire UI between English, Kinyarwanda, Swahili, and French -- sidebar, buttons, alerts, headings all translate instantly |
-| **Voice Playback** | gTTS reads treatment aloud in the farmer's language with speed control (0.75x, 1x, 1.25x, 1.5x). Kinyarwanda falls back to Swahili voice |
-| **Smart Treatment Plans** | Two types: Recovery Checklist (diseased plants) and Keep It Healthy Checklist (disease prevention) |
-| **Chat-Style Progress** | Each plant gets a dedicated chat view. Upload photos, add notes, AI replies with analysis |
-| **AI Progress Tracking** | Gemini Vision compares original assessment photo against follow-up photos, classifying: improving, stable, or worsening |
-| **Check Progress Section** | Lists all assessments as clickable rows. Click any to open its treatment plan or start one |
-| **Evaluation Metrics** | AI confidence score, severity level, and seasonal context displayed with every diagnosis |
-| **Personalization** | Farmers select resource preference (organic/chemical/both), current season, and location |
-| **Assessment Ledger** | Full SQLite database of all diagnoses with farmer, crop, disease, severity, and date |
-| **Fallback Mode** | If Gemini quota is exceeded or network is unavailable, the app continues with pre-loaded demo data |
-| **Smooth Modern UI** | Inter font, card hover animations, gradient backgrounds, slide-in alerts, glow effects, progress bars |
-| **Mobile-Compatible** | Streamlit renders on phones and tablets. Camera capture works on mobile browsers |
+| Disease Detection | Upload a photo or take one with the camera. Gemini Vision identifies diseases, pests, or nutrient deficiencies |
+| Three Input Methods | Camera capture, file upload, or pre-loaded demo samples |
+| Auto-Detect Crop | Select "Other (let AI detect)" and Gemini identifies the crop type from the photo |
+| Demo Samples | Pre-loaded disease cases (Maize Blight, Cassava Mosaic Virus, Tomato Late Blight) for offline demonstration |
+| Site-Wide Language Toggle | Switch the entire UI between English, Kinyarwanda, Swahili, and French -- sidebar, buttons, alerts, headings all translate instantly |
+| Voice Playback | gTTS reads treatment aloud in the farmer's language with speed control (0.75x, 1x, 1.25x, 1.5x). Kinyarwanda falls back to Swahili voice |
+| Smart Treatment Plans | Two types: Recovery Checklist (diseased plants) and Keep It Healthy Checklist (disease prevention) |
+| Chat-Style Progress | Each plant gets a dedicated chat view. Upload photos, add notes, AI replies with analysis |
+| AI Progress Tracking | Gemini Vision compares original assessment photo against follow-up photos, classifying: improving, stable, or worsening |
+| Check Progress Section | Lists all assessments as clickable rows. Click any to open its treatment plan or start one |
+| Checklist History | Full history of all active plans with progress bars, type badges, and quick-open buttons |
+| Evaluation Metrics | AI confidence score, severity level, and seasonal context displayed with every diagnosis |
+| Personalization | Farmers select resource preference (organic/chemical/both), current season, and location |
+| Assessment Ledger | Full SQLite database of all diagnoses with farmer, crop, disease, severity, and date |
+| Fallback Mode | If Gemini quota is exceeded or network is unavailable, the app continues with pre-loaded demo data |
+| Smooth Modern UI | Inter font, card hover animations, gradient backgrounds, slide-in alerts, glow effects, progress bars |
+| Mobile-Compatible | Streamlit renders on phones and tablets. Camera capture works on mobile browsers |
 
 ---
 
@@ -158,6 +159,28 @@ Each stage accepts a follow-up photograph. AI compares it to the original assess
 | Human Approval Step | Every treatment plan requires user confirmation before creation |
 | Evaluation Metrics | AI confidence, severity, recovery rate displayed on dashboard |
 | Personalization with Constraints | Resource preference, season, location, and crop type constrain all recommendations |
+
+---
+
+## Deployment Plan
+
+| Phase | Target | Setup | Cost |
+|-------|--------|-------|------|
+| Phase 0 (Hackathon) | Local devcontainer / Streamlit Cloud | `streamlit run app.py`. Deploy to Streamlit Community Cloud with GitHub integration. No config needed. | Free |
+| Phase 1 (Pilot) | 5-10 farming cooperatives in Rwanda | Deploy on Railway or HuggingFace Spaces. Each cooperative gets a Chrome shortcut on a shared tablet. Central SQLite per cooperative. Gemini API key shared. | $10-15/month |
+| Phase 2 (District Scale) | 50+ cooperatives per district | Docker container on AWS EC2 / GCP Cloud Run. Switch SQLite to PostgreSQL for concurrent access. Add simple PIN-based auth per cooperative. Offline-first: cache Gemini responses for common diseases. | $30-50/month |
+| Phase 3 (National Rollout) | Ministry of Agriculture partnership | Multi-region deployment on GCP (Kigali, Nairobi, Johannesburg). React Native mobile app for offline field use. Sync when connected. On-device TensorFlow Lite for basic disease detection (no internet needed). Federated learning for model improvement across regions. | Negotiated with government / donor funding |
+| Phase 4 (Pan-African) | East African Community + beyond | Kubernetes cluster with auto-scaling. Multi-tenant architecture. Local model training per country. Integration with national agricultural extension systems. | Enterprise / grant funding |
+
+### Architecture Evolution
+
+```
+Phase 0:          Phase 1-2:                  Phase 3-4:
+Streamlit (Python)   Next.js + FastAPI          React Native + K8s
+SQLite               PostgreSQL                  Multi-region DB
+Gemini API           Gemini + Cache              TF Lite on-device
+Single instance      Docker container           Auto-scale cluster
+```
 
 ---
 
