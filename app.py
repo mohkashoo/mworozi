@@ -882,21 +882,21 @@ with c2:
     st.markdown(
         "<h1 style='margin:0;font-size:1.5rem'>MWOROZI</h1>"
         "<p style='margin:0;color:#64748b;font-size:0.85rem'>"
-        "<i class='bi bi-cloud-sun'></i> AI Crop Health Assistant  •  "
+        "<i class='bi bi-cloud-sun'></i> {t('app_subtitle')}  •  "
         "<span style='color:#10b981'><i class='bi bi-globe2'></i> "
-        "Rwanda / East Africa</span></p>",
+        "{t('app_region')}</span></p>",
         unsafe_allow_html=True,
     )
 
 # ── Navigation ──────────────────────────────────────────
 nav_col1, nav_col2, nav_col3 = st.columns([1, 1, 4])
 with nav_col1:
-    if st.button("📊 Dashboard", key="nav_dash", use_container_width=True,
+    if st.button(f"📊 {t('dashboard')}", key="nav_dash", use_container_width=True,
                  type="secondary" if st.session_state.get("treatment_view") else "primary"):
         st.session_state["treatment_view"] = None
         st.rerun()
 with nav_col2:
-    if st.button("🌱 Check Progress", key="nav_progress", use_container_width=True,
+    if st.button(f"🌱 {t('check_progress_nav')}", key="nav_progress", use_container_width=True,
                  type="primary" if st.session_state.get("treatment_view") else "secondary"):
         pass  # Will scroll to the check progress section
 
@@ -1002,11 +1002,11 @@ if analyze_btn:
     lang = st.session_state.get("language", "English")
 
     if not farmer:
-        st.error("Please enter the farmer's name.")
+        st.error(t("please_name"))
     elif image_bytes is None:
-        st.error("Please upload a crop photo or select a demo sample.")
+        st.error(t("please_img"))
     else:
-        with st.spinner("Analyzing crop image with AI…"):
+        with st.spinner(t("analyzing")):
             result = get_analysis(image_bytes, crop_for_demo if 'crop_for_demo' in dir() else crop_sel, lang)
 
         if result.get("error"):
@@ -1064,36 +1064,36 @@ if st.session_state.get("analysis_done"):
     if res["severity"] == "Severe":
         st.markdown(f"""
         <div class="alert-disease">
-            <h2><i class='bi bi-exclamation-triangle-fill'></i> Severe Disease Detected</h2>
+            <h2><i class='bi bi-exclamation-triangle-fill'></i> {t('severe_title')}</h2>
             <p>Crop: <strong>{res['crop']}</strong>  •  
             Issue: <strong>{res['disease'][:80]}</strong>  •  
-            Severity: <strong>SEVERE</strong> — Immediate action required</p>
+            Severity: <strong>{t('severe_msg')}</strong></p>
         </div>
         """, unsafe_allow_html=True)
     elif res["severity"] == "Moderate":
         st.markdown(f"""
         <div class="alert-disease" style="background:linear-gradient(135deg,#422006 0%,#713f12 100%);border-color:#f59e0b">
-            <h2 style="color:#fde68a"><i class='bi bi-exclamation-circle-fill'></i> Moderate Issue Detected</h2>
+            <h2 style="color:#fde68a"><i class='bi bi-exclamation-circle-fill'></i> {t('moderate_title')}</h2>
             <p style="color:#fef3c7">Crop: <strong>{res['crop']}</strong>  •  
             Issue: <strong>{res['disease'][:80]}</strong>  •  
-            Severity: <strong>MODERATE</strong> — Treat within the week</p>
+            Severity: <strong>{t('moderate_msg')}</strong></p>
         </div>
         """, unsafe_allow_html=True)
     elif res["severity"] == "Mild":
         st.markdown(f"""
         <div class="alert-healthy" style="background:linear-gradient(135deg,#0c4a6e 0%,#075985 100%);border-color:#3b82f6">
-            <h2 style="color:#93c5fd"><i class='bi bi-info-circle-fill'></i> Mild Issue — Monitor</h2>
+            <h2 style="color:#93c5fd"><i class='bi bi-info-circle-fill'></i> {t('mild_title')}</h2>
             <p style="color:#dbeafe">Crop: <strong>{res['crop']}</strong>  •  
             Issue: <strong>{res['disease'][:80]}</strong>  •  
-            Severity: <strong>MILD</strong> — Monitor and apply preventive measures</p>
+            Severity: <strong>{t('mild_msg')}</strong></p>
         </div>
         """, unsafe_allow_html=True)
     else:
         st.markdown(f"""
         <div class="alert-healthy">
-            <h2><i class='bi bi-check-circle-fill'></i> Crop Appears Healthy</h2>
+            <h2><i class='bi bi-check-circle-fill'></i> {t('healthy_title')}</h2>
             <p>Crop: <strong>{res['crop']}</strong>  •  
-            No disease detected. Continue routine care.</p>
+            {t('healthy_msg')}</p>
         </div>
         """, unsafe_allow_html=True)
 
@@ -1182,8 +1182,7 @@ if st.session_state.get("analysis_done"):
 
     # ── Start Checklist Button ─────────────────────────
     if res["severity"] != "None":
-        btn_label = "🌱 Start Recovery Checklist for This Plant"
-        if st.button(btn_label, key="start_checklist", type="primary", use_container_width=True):
+        if st.button(f"🌱 {t('start_recovery')}", key="start_checklist", type="primary", use_container_width=True):
             conn = sqlite3.connect(DB_PATH)
             row = conn.execute("SELECT id FROM assessments ORDER BY id DESC LIMIT 1").fetchone()
             aid = row[0] if row else 0
@@ -1193,7 +1192,7 @@ if st.session_state.get("analysis_done"):
             st.session_state["treatment_view"] = plan_id
             st.rerun()
     else:
-        if st.button("🌿 Keep It Healthy Checklist", key="keep_healthy", type="secondary", use_container_width=True):
+        if st.button(f"🌿 {t('keep_healthy_btn')}", key="keep_healthy", type="secondary", use_container_width=True):
             conn = sqlite3.connect(DB_PATH)
             row = conn.execute("SELECT id FROM assessments ORDER BY id DESC LIMIT 1").fetchone()
             aid = row[0] if row else 0
@@ -1205,14 +1204,11 @@ if st.session_state.get("analysis_done"):
 
 else:
     # ── Empty state ───────────────────────────────────
-    st.markdown("""
+    st.markdown(f"""
     <div style='text-align:center;padding:4rem 2rem'>
         <p style='font-size:3.5rem;margin:0;color:#10b981'><i class='bi bi-tree-fill'></i></p>
-        <h3 style='color:#64748b;margin:0.5rem 0'>Welcome to Mworozi</h3>
-        <p style='color:#475569;max-width:480px;margin:0 auto'>
-        Upload a photo of your crop to detect diseases, get treatment recommendations, 
-        and receive prevention advice — all in your language.
-        </p>
+        <h3 style='color:#64748b;margin:0.5rem 0'>{t('welcome_title')}</h3>
+        <p style='color:#475569;max-width:480px;margin:0 auto'>{t('welcome_desc')}</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -1223,7 +1219,7 @@ else:
 if st.session_state.get("treatment_view"):
     plan_id = st.session_state["treatment_view"]
     
-    if st.button("← Back to Dashboard", key="back_dash"):
+    if st.button(f"← {t('back_to_dash')}", key="back_dash"):
         st.session_state["treatment_view"] = None
         st.rerun()
     
@@ -1235,12 +1231,12 @@ if st.session_state.get("treatment_view"):
     conn.close()
     
     is_healthy = plan_info[2] == "Keep Healthy"
-    checklist_type = "Keep Healthy" if is_healthy else "Recovery"
+    checklist_type = t("keep_healthy_title") if is_healthy else t("recovery_checklist")
     icon = "🌿" if is_healthy else "🌱"
     
     st.markdown(f"""
     <div style='display:flex;justify-content:space-between;align-items:center'>
-        <h3 style='color:#10b981;margin:0'>{icon} {plan_info[1]} — {checklist_type} Checklist</h3>
+        <h3 style='color:#10b981;margin:0'>{icon} {plan_info[1]} — {checklist_type}</h3>
         <span style='color:#94a3b8;font-size:0.85rem'>Farmer: {plan_info[0]} | {plan_info[2][:40]}</span>
     </div>
     """, unsafe_allow_html=True)
@@ -1323,8 +1319,8 @@ if st.session_state.get("treatment_view"):
         st.markdown(f"""
         <div style='text-align:center;padding:1rem;background:#052e16;border-radius:12px'>
             <p style='font-size:2rem;margin:0'>🎉</p>
-            <p style='color:#86efac;margin:0.5rem 0;font-size:1.1rem'><strong>All Tasks Complete!</strong></p>
-            <p style='color:#bbf7d0;margin:0;font-size:0.9rem'>{'Your plant has recovered. Keep monitoring regularly.' if not is_healthy else 'Your plant is healthy. Continue good practices.'}</p>
+            <p style='color:#86efac;margin:0.5rem 0;font-size:1.1rem'><strong>{t('all_done')}!</strong></p>
+            <p style='color:#bbf7d0;margin:0;font-size:0.9rem'>{t('all_done_recovery') if not is_healthy else t('all_done_healthy')}</p>
         </div>
         """, unsafe_allow_html=True)
     
@@ -1349,8 +1345,8 @@ if st.session_state.get("treatment_view"):
 # CHECK PROGRESS — list all assessments
 # ══════════════════════════════════════════════════════════
 st.markdown("---")
-st.markdown("<h3 style='color:#10b981'><i class='bi bi-search'></i> Check Progress — All Assessments</h3>", unsafe_allow_html=True)
-st.markdown("<p style='color:#94a3b8;font-size:0.85rem'>Select an assessment below to start or continue a recovery checklist for that plant.</p>", unsafe_allow_html=True)
+st.markdown(f"<h3 style='color:#10b981'><i class='bi bi-search'></i> {t('check_progress')}</h3>", unsafe_allow_html=True)
+st.markdown(f"<p style='color:#94a3b8;font-size:0.85rem'>{t('check_progress_desc')}</p>", unsafe_allow_html=True)
 
 all_ledger = get_assessments()
 if not all_ledger.empty:
@@ -1372,11 +1368,11 @@ if not all_ledger.empty:
                                        (row['farmer_name'], row['crop'])).fetchone()
                 conn.close()
                 if existing:
-                    if st.button(f"Continue →", key=f"continue_{idx}", use_container_width=True):
+                    if st.button(f"{t('continue_btn')} →", key=f"continue_{idx}", use_container_width=True):
                         st.session_state["treatment_view"] = existing[0]
                         st.rerun()
                 else:
-                    btn_label = "🌿 Keep Healthy" if sev in ("None", "Unknown") else "🌱 Treat This Plant"
+                    btn_label = f"🌿 {t('keep_healthy_row')}" if sev in ("None", "Unknown") else f"🌱 {t('treat_btn')}"
                     if st.button(btn_label, key=f"treat_{idx}", use_container_width=True):
                         aid = row.get('id', idx + 1)
                         disease_label = "Keep Healthy" if sev in ("None", "Unknown") else row['disease']
@@ -1385,4 +1381,4 @@ if not all_ledger.empty:
                         st.rerun()
             st.markdown("<hr style='margin:0.25rem 0;border-color:#1e293b'>", unsafe_allow_html=True)
 else:
-    st.markdown("<p style='color:#64748b'>No assessments yet. Upload a crop photo to get started.</p>", unsafe_allow_html=True)
+    st.markdown(f"<p style='color:#64748b'>{t('no_assessments')}</p>", unsafe_allow_html=True)
