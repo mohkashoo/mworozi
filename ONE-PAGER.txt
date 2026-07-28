@@ -1,77 +1,71 @@
-=== MWOROZI — AI CROP HEALTH ASSISTANT ===
-Frontiers GenAI Hackathon 2026 | Track 01: Agriculture
-Team: [Your Team Name]
+=== AGRISCOPE AI — Smart Farming Assistant ===
+Frontiers GenAI Hackathon 2026 | Track 01: Agriculture & BioSystems
+3 Crops: Cassava, Maize, Yam | Region: Rwanda / East Africa
 
 =========================================
 PROBLEM
 =========================================
-Smallholder farmers in Rwanda lose 30-60% of crops to preventable diseases.
-Extension officers are outnumbered 1:10,000. Most farmers rely on visual
-inspection alone with no access to expert advice.
+Smallholder farmers in Rwanda lose 30-50% of their crops to preventable
+diseases and pests. They lack: timely scouting plans, climate-driven
+growing advice, and direct market access. Extension officers are
+outnumbered — farmers make decisions blind.
 
 =========================================
-SOLUTION
+SOLUTION — 3 Pillars
 =========================================
-A mobile-friendly AI assistant that:
-1. Identifies crop diseases from a photo (Gemini Vision)
-2. Provides treatment plans with locally available materials
-3. Tracks recovery through photo check-ins with AI progress analysis
-4. Works in English, Kinyarwanda, Swahili, and French
-5. Reads treatments aloud for farmers with limited literacy
 
-=========================================
-HOW IT WORKS
-=========================================
-Farmer uploads photo → Gemini Vision detects disease
-    → AI generates treatment plan with daily tasks
-    → Farmer uploads follow-up photos at each stage
-    → AI compares before/after → reports improving/stable/worsening
-    → Dashboard tracks recovery across all plants
+PILLAR 1 — Smart Scouting
+  Weekly scout plan: when, where, and what to look for
+  5 spots x 4 plants = 20 sampling points, edges prioritized
+  Gemini Vision photo check-in with instant AI diagnosis
+  Low confidence → "Human Verification Recommended" flag
+  Neighbor early warning alerts for nearby disease outbreaks
+  4-step recovery follow plan with photo tracking
+
+PILLAR 2 — Climate Growing Calendar
+  Personalized season calendar: land prep → planting → weeding
+    → fertilizer timing → harvest window
+  Based on Open-Meteo free weather API (no key needed)
+  Budget-constrained: stays within farmer's RWF budget
+  Real-time adaptation: "delay planting 5 days — rains late"
+
+PILLAR 3 — Market Connect
+  Harvest estimate based on plot size + crop type
+  Farmgate vs market price comparison with sell/hold advice
+  5 seeded buyers per crop with contacts + WhatsApp messages
+  AI-generated WhatsApp outreach in farmer's language
+  Quality standards + negotiation tips
 
 =========================================
 TECH STACK
 =========================================
-Frontend:  Streamlit + Bootstrap Icons + dark theme
-AI:        Google Gemini (vision + text)
-Voice:    gTTS with speed control (0.75x - 1.5x)
-Database: SQLite with Pandas
-Demo:     Pre-loaded disease samples + cached audio
+Frontend:  Streamlit + Bootstrap Icons + Inter font
+AI:        Gemini 3.6-flash (vision + text)
+Weather:   Open-Meteo API (free, no key)
+Database:  SQLite
+Languages: English, Kinyarwanda, Swahili, French
+Deploy:    Streamlit Cloud (auto-deploy from GitHub)
 
 =========================================
-KEY FEATURES
+BONUS FEATURES (Judging Criteria)
 =========================================
-• Disease detection from photo (real or demo)
-• Smart Treatment Plan with staged recovery checklist
-• AI progress tracking (before/after photo comparison)
-• Voice playback in farmer's language
-• Multi-language support (EN, RW, SW, FR)
-• Treatment dashboard with recovery metrics
-• Chat-style check-in for each plant
-• Keep Healthy checklist for disease prevention
-• Full assessment history and ledger
+Human Approval: Low-confidence diagnoses flagged for verification
+Evaluation Metrics: AI confidence score + severity badges
+Personalization: Budget constraint + location-based weather
+Accessibility: Voice, multi-language, SMS/WhatsApp sharing
 
 =========================================
-ETHICS & BONUSES
+DEPLOYMENT
 =========================================
-✓ Human-in-the-loop (AI advises, farmer decides)
-✓ Evaluation metrics (confidence score, recovery rate)
-✓ Personalization (resources, season, crop, location)
-✓ Accessible (voice, dark theme, large buttons)
-✓ Privacy-first (local SQLite, no cloud storage)
-
-=========================================
-BUSINESS MODEL / DEPLOYMENT
-=========================================
-Phase 1: Free pilot with 5 cooperatives in Rwanda
-Phase 2: Freemium — free diagnosis, paid premium plans
-Phase 3: Partner with Ministry of Agriculture for national rollout
-Cost: $0 software. Runs on any laptop or phone browser.
+Live: mworozi.streamlit.app
+Cost: $0 — runs on free Streamlit Cloud tier
+Setup: 1 command: streamlit run app.py
 
 =========================================
 WHY THIS WINS
 =========================================
-• Real problem affecting millions of farmers
-• Works offline with demo data (no internet? no problem)
-• Voice support for low-literacy users
-• Track record: Gemini API + Streamlit = reliable demo
-• Scalable: one laptop serves an entire village
+3 crops, 3 pillars, 4 languages, zero cost
+Full farmer journey: scout → treat → grow → sell
+Weather-adaptive, budget-constrained, scientifically cited
+Works on basic phones (SMS share) to smartphones (WhatsApp + camera)
+Every recommendation cites: FAO, IITA, CGIAR

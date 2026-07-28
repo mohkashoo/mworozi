@@ -100,8 +100,20 @@ def init_db():
     conn.execute("""CREATE TABLE IF NOT EXISTS assessments (id INTEGER PRIMARY KEY AUTOINCREMENT,
         farmer_name TEXT, location TEXT, crop TEXT, disease TEXT, severity TEXT, treatment TEXT,
         language TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
+    conn.execute("""CREATE TABLE IF NOT EXISTS follow_plans (id INTEGER PRIMARY KEY AUTOINCREMENT,
+        assessment_rowid INTEGER, crop TEXT, disease TEXT, status TEXT DEFAULT 'active',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
+    conn.execute("""CREATE TABLE IF NOT EXISTS follow_tasks (id INTEGER PRIMARY KEY AUTOINCREMENT,
+        plan_id INTEGER, stage TEXT, task TEXT, completed INTEGER DEFAULT 0)""")
     conn.commit()
     conn.close()
+
+FOLLOW_STEPS = [
+    ("Day 1", "Identify & Isolate: Confirm the disease. Remove badly infected plants/leaves. Take photo for record."),
+    ("Day 3", "First Treatment: Apply recommended pesticide/fungicide or organic alternative. Water at soil level only. Take photo."),
+    ("Day 7", "Re-assess: Check for new symptoms. Re-apply treatment if needed. Take photo of recovery progress."),
+    ("Day 14", "Final Check: Evaluate treatment success. If recovered, continue prevention. If not, consult extension officer."),
+]
 
 def register_plot(farmer, location, crop, planting_date, plot_size, budget):
     conn = sqlite3.connect(DB_PATH)
@@ -130,6 +142,30 @@ def get_assessments():
     df = pd.read_sql("SELECT rowid AS row_id, farmer_name, location, crop, disease, severity, language, created_at FROM assessments ORDER BY created_at DESC LIMIT 30", conn)
     conn.close()
     return df
+
+def create_follow_plan(assessment_rowid, crop, disease):
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("INSERT INTO follow_plans (assessment_rowid, crop, disease) VALUES (?,?,?)", (assessment_rowid, crop, disease))
+    pid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    for stage, task in FOLLOW_STEPS:
+        conn.execute("INSERT INTO follow_tasks (plan_id, stage, task) VALUES (?,?,?)", (pid, stage, task))
+    conn.commit(); conn.close()
+    return pid
+
+def get_follow_plan(plan_id):
+    conn = sqlite3.connect(DB_PATH)
+    plan = conn.execute("SELECT * FROM follow_plans WHERE id=?", (plan_id,)).fetchone()
+    tasks = conn.execute("SELECT * FROM follow_tasks WHERE plan_id=? ORDER BY id", (plan_id,)).fetchall()
+    conn.close()
+    return plan, tasks
+
+def toggle_task(task_id):
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.execute("SELECT completed FROM follow_tasks WHERE id=?", (task_id,)).fetchone()
+    if cur:
+        conn.execute("UPDATE follow_tasks SET completed=? WHERE id=?", (1 if not cur[0] else 0, task_id))
+        conn.commit()
+    conn.close()
 
 # ── Weather ─────────────────────────────────────────────
 @st.cache_data(ttl=600)
@@ -465,7 +501,36 @@ else:
         with col_close:
             if st.button("✕ Close Report", key="close_scan", use_container_width=True):
                 del st.session_state["quick_scan_result"]
+                st.session_state.pop("active_follow_plan", None)
                 st.rerun()
+        st.markdown("---")
+
+        # Follow Plan
+        if st.button("🌱 Start Follow Plan (4-Step Recovery Checklist)", key="start_follow", type="primary", use_container_width=True):
+            assessments_df = get_assessments()
+            if not assessments_df.empty:
+                latest = assessments_df.iloc[0]
+                pid = create_follow_plan(int(latest['row_id']), latest['crop'], latest['disease'])
+                st.session_state["active_follow_plan"] = pid
+                st.rerun()
+
+        if "active_follow_plan" in st.session_state and st.session_state["active_follow_plan"]:
+            fp_id = st.session_state["active_follow_plan"]
+            plan, tasks = get_follow_plan(fp_id)
+            if plan:
+                done = sum(1 for t in tasks if t[4])
+                st.markdown(f"<div class='card'><div class='card-title'>Recovery Checklist — {done}/{len(tasks)} Complete</div><div style='background:#1e293b;border-radius:99px;height:8px;margin-bottom:0.5rem'><div style='background:#10b981;border-radius:99px;height:8px;width:{int(done/len(tasks)*100)}%'></div></div>", unsafe_allow_html=True)
+                for t in tasks:
+                    chk = "✅" if t[4] else "⬜"
+                    style = "color:#10b981" if t[4] else "color:#94a3b8"
+                    st.markdown(f"<div style='padding:0.5rem 0;border-bottom:1px solid #1e293b'><span style='{style}'><strong>{chk} {t[2]}:</strong> {t[3]}</span></div>", unsafe_allow_html=True)
+                    if not t[4]:
+                        if st.button(f"✓ Mark Done — {t[2]}", key=f"check_{t[0]}", use_container_width=True):
+                            toggle_task(t[0])
+                            st.rerun()
+                st.markdown("</div>", unsafe_allow_html=True)
+                if done == len(tasks):
+                    st.success("All tasks complete! Your crop is on the path to recovery.")
         st.markdown("---")
 
     pillar = st.radio("", [f"🔍 {t('pillar1')}", f"📅 {t('pillar2')}", f"💰 {t('pillar3')}"], horizontal=True, key="pillar_nav", label_visibility="collapsed")
