@@ -686,7 +686,7 @@ def get_assessments() -> pd.DataFrame:
     try:
         conn = sqlite3.connect(DB_PATH, timeout=10)
         df = pd.read_sql_query(
-            "SELECT rowid, farmer_name, location, crop, disease, severity, created_at "
+            "SELECT rowid AS row_id, farmer_name, location, crop, disease, severity, created_at "
             "FROM assessments ORDER BY created_at DESC LIMIT 50", conn
         )
         conn.close()
@@ -1511,7 +1511,7 @@ if not all_ledger.empty:
                     btn_label = f"🌿 {t('keep_healthy_row')}" if sev in ("None", "Unknown") else f"🌱 {t('treat_btn')}"
                     if st.button(btn_label, key=f"treat_{idx}", use_container_width=True):
                         disease_label = "Keep Healthy" if sev in ("None", "Unknown") else row['disease']
-                        pid = create_treatment_plan(row['rowid'], row['farmer_name'], row['crop'], disease_label)
+                        pid = create_treatment_plan(row['row_id'], row['farmer_name'], row['crop'], disease_label)
                         st.session_state["treatment_view"] = pid
                         st.rerun()
             with c7:
@@ -1519,7 +1519,7 @@ if not all_ledger.empty:
                     st.session_state[f"editing_{idx}"] = not st.session_state.get(f"editing_{idx}", False)
             with c8:
                 if st.button("🗑️", key=f"delete_{idx}", help="Remove this assessment", use_container_width=True):
-                    delete_assessment(int(row['rowid']))
+                    delete_assessment(int(row['row_id']))
                     st.rerun()
             
             # Edit form (collapsible)
@@ -1538,11 +1538,11 @@ if not all_ledger.empty:
                         new_loc = st.text_input("Location", value=row['location'], key=f"eloc_{idx}")
                     
                     if st.button("Save Changes", key=f"save_{idx}", type="primary"):
-                        update_assessment(int(row['rowid']), 'farmer_name', new_name)
-                        update_assessment(int(row['rowid']), 'crop', new_crop)
-                        update_assessment(int(row['rowid']), 'disease', new_disease)
-                        update_assessment(int(row['rowid']), 'severity', new_sev)
-                        update_assessment(int(row['rowid']), 'location', new_loc)
+                        update_assessment(int(row['row_id']), 'farmer_name', new_name)
+                        update_assessment(int(row['row_id']), 'crop', new_crop)
+                        update_assessment(int(row['row_id']), 'disease', new_disease)
+                        update_assessment(int(row['row_id']), 'severity', new_sev)
+                        update_assessment(int(row['row_id']), 'location', new_loc)
                         st.session_state[f"editing_{idx}"] = False
                         st.rerun()
             
