@@ -592,7 +592,7 @@ with st.sidebar:
 
     img_source = st.radio(
         "Image source",
-        ["📷 Upload Photo", "🧪 Demo Sample"],
+        ["📷 Take Photo", "📁 Upload Photo", "🧪 Demo Sample"],
         key="img_source",
         label_visibility="collapsed",
     )
@@ -601,27 +601,27 @@ with st.sidebar:
     preview = None
     crop_for_demo = crop
 
-    if "🧪" in img_source:
-        # Simulated images — use colored placeholder + overlay text
+    if "Take Photo" in img_source:
+        cam_img = st.camera_input("Point at the crop and take a photo", key="camera_input")
+        if cam_img:
+            image_bytes = cam_img.read()
+            st.success("Photo captured from camera")
+    elif "Demo" in img_source:
         demo_crop = st.selectbox("Sample Crop Issue", list(DEMO_DISEASES.keys()), key="demo_crop")
         crop_for_demo = demo_crop
 
-        # Create a visual placeholder image
-        from PIL import Image, ImageDraw, ImageFont, ImageFilter
+        from PIL import Image, ImageDraw, ImageFont
         import io as pil_io
 
         img = Image.new("RGB", (600, 400), (34, 139, 34))
         draw = ImageDraw.Draw(img)
-        # Draw leaf-like shape
         draw.ellipse([100, 100, 500, 300], fill=(50, 180, 50))
-        # Draw disease spots
         for _ in range(15):
             x = np.random.randint(150, 450)
             y = np.random.randint(130, 270)
             draw.ellipse([x-8, y-8, x+8, y+8], fill=(139, 90, 43))
             draw.ellipse([x-4, y-4, x+4, y+4], fill=(101, 67, 33))
 
-        # Add text
         try:
             font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 24)
         except:
@@ -636,7 +636,7 @@ with st.sidebar:
 
         st.info(f"Using sample: {demo_crop} leaf with disease spots")
 
-    else:
+    elif "Upload" in img_source:
         uploaded = st.file_uploader(
             "Upload crop photo", type=["jpg", "jpeg", "png", "webp"],
             key="uploaded_img",
@@ -679,7 +679,7 @@ if analyze_btn:
             st.warning(f"Gemini analysis had an issue: {result['error']}. Showing best available data.")
 
         # Check if it's a demo image or real
-        is_real = "📷" in img_source if 'img_source' in dir() else False
+        is_real = ("Take Photo" in img_source or "Upload" in img_source) if 'img_source' in dir() else False
 
         sev = result.get("severity", "Unknown")
         disease = result.get("disease", "See analysis")
