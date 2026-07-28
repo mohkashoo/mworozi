@@ -326,16 +326,51 @@ with st.sidebar:
     cam_img = st.camera_input("Take photo", key="quick_cam") if "Camera" in img_src else None
     up_file = st.file_uploader("Upload crop photo", type=["jpg","jpeg","png"], key="quick_upload") if "Upload" in img_src else None
     
-    if cam_img:
-        img_bytes = cam_img.read()
-        with st.spinner("Analyzing..."):
-            result = ask_gemini_vision(img_bytes, f"Analyze this crop image. Identify: 1) Crop type 2) Disease/pest 3) Severity 4) Action. Keep it under 150 words.", 300)
-            st.markdown(f"<div class='card' style='padding:0.75rem'><p style='color:#e2e8f0;font-size:0.85rem'>{result or 'No result — check Gemini API key.'}</p></div>", unsafe_allow_html=True)
-    if up_file:
-        img_bytes = up_file.read()
-        with st.spinner("Analyzing..."):
-            result = ask_gemini_vision(img_bytes, f"Analyze this crop image. Identify: 1) Crop type 2) Disease/pest 3) Severity 4) Action. Keep it under 150 words.", 300)
-            st.markdown(f"<div class='card' style='padding:0.75rem'><p style='color:#e2e8f0;font-size:0.85rem'>{result or 'No result — check Gemini API key.'}</p></div>", unsafe_allow_html=True)
+    if cam_img or up_file:
+        img_bytes = cam_img.read() if cam_img else up_file.read()
+        if img_bytes:
+            with st.spinner("AI analyzing..."):
+                import urllib.parse
+                # Full detailed analysis prompt (from Mworozi)
+                diagnosis = ask_gemini_vision(img_bytes, """You are an expert agricultural extension officer for East Africa. Analyze this crop image.
+
+Provide your analysis in this EXACT format:
+
+## Disease / Issue
+(Name of the disease, pest, or nutrient deficiency affecting this crop.)
+
+## Severity
+(Mild / Moderate / Severe — and a brief explanation why.)
+
+## Recommended Treatment
+(Specific, actionable steps the farmer can take using locally available materials. Include organic options if possible.)
+
+## Prevention
+(How to prevent this in future growing seasons.)
+
+If the crop appears healthy, say "No disease detected — crop appears healthy." and skip treatment/prevention.""", 800)
+
+                if diagnosis:
+                    st.markdown(f"<div class='card' style='padding:0.75rem'><p style='color:#e2e8f0;font-size:0.85rem'>{diagnosis}</p></div>", unsafe_allow_html=True)
+                    
+                    # Extract disease + severity
+                    sev = "Moderate"
+                    if "Severe" in diagnosis or "severe" in diagnosis: sev = "Severe"
+                    elif "Mild" in diagnosis or "mild" in diagnosis: sev = "Mild"
+                    elif "healthy" in diagnosis.lower(): sev = "None"
+                    
+                    disease_name = diagnosis.split("## Disease")[1].split("\n")[0].replace("/ Issue", "").strip() if "## Disease" in diagnosis else "See analysis"
+                    
+                    # Share buttons
+                    share_msg = f"🌱 AgriScope AI Diagnosis\n\n🦠 {disease_name}\n⚠️ Severity: {sev}\n\n{diagnosis[:800]}"
+                    wa_url = f"https://wa.me/?text={urllib.parse.quote(share_msg[:1500])}"
+                    sms_url = f"sms:?body={urllib.parse.quote(share_msg[:400])}"
+                    
+                    col1, col2 = st.columns(2)
+                    with col1: st.markdown(f'<a href="{wa_url}" target="_blank"><button style="width:100%;padding:0.4rem;border-radius:8px;border:1px solid #25D366;background:transparent;color:#25D366;cursor:pointer;font-size:0.8rem">💬 WhatsApp</button></a>', unsafe_allow_html=True)
+                    with col2: st.markdown(f'<a href="{sms_url}"><button style="width:100%;padding:0.4rem;border-radius:8px;border:1px solid #3b82f6;background:transparent;color:#3b82f6;cursor:pointer;font-size:0.8rem">📱 SMS</button></a>', unsafe_allow_html=True)
+                else:
+                    st.warning("No result — check Gemini API key.")
     
     st.markdown("---")
     st.markdown(f"<span style='color:#10b981'><i class='bi bi-cpu'></i> {t('gemini_on' if gemini_client else 'gemini_off')}</span>", unsafe_allow_html=True)
