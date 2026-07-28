@@ -1,71 +1,91 @@
-=== AGRISCOPE AI — Smart Farming Assistant ===
+=== AGRISCOPE AI — Project Brief ===
 Frontiers GenAI Hackathon 2026 | Track 01: Agriculture & BioSystems
-3 Crops: Cassava, Maize, Yam | Region: Rwanda / East Africa
+3 Crops: Cassava, Maize, Yam | Region: Rwanda, East Africa
 
 =========================================
-PROBLEM
+THE PROBLEM
 =========================================
-Smallholder farmers in Rwanda lose 30-50% of their crops to preventable
-diseases and pests. They lack: timely scouting plans, climate-driven
-growing advice, and direct market access. Extension officers are
-outnumbered — farmers make decisions blind.
+Rwandan smallholders lose 30-50% of harvests to preventable crop diseases.
+Extension officers are outnumbered 1:10,000. Farmers lack scouting plans,
+climate-driven growing advice, and direct market access. Information that
+exists (FAO, IITA, CGIAR) never reaches the field. Farmers decide blind.
 
 =========================================
-SOLUTION — 3 Pillars
+CORE FEATURES
 =========================================
 
-PILLAR 1 — Smart Scouting
-  Weekly scout plan: when, where, and what to look for
-  5 spots x 4 plants = 20 sampling points, edges prioritized
-  Gemini Vision photo check-in with instant AI diagnosis
-  Low confidence → "Human Verification Recommended" flag
-  Neighbor early warning alerts for nearby disease outbreaks
-  4-step recovery follow plan with photo tracking
+Smart Scouting Engine
+  Weekly scout plan: when, where, and what to check (5 spots * 4 plants =
+  20 sample points, edges prioritized). Top 3 threats per growth stage.
+  Every recommendation cites source: FAO, IITA, CGIAR, or Open-Meteo.
 
-PILLAR 2 — Climate Growing Calendar
-  Personalized season calendar: land prep → planting → weeding
-    → fertilizer timing → harvest window
-  Based on Open-Meteo free weather API (no key needed)
-  Budget-constrained: stays within farmer's RWF budget
-  Real-time adaptation: "delay planting 5 days — rains late"
+Photo Diagnosis + Human Approval Layer
+  Farmer snaps a photo. Gemini Vision returns disease, severity, treatment.
+  Low confidence (<85%) triggers "Human Verification Recommended" flag.
+  Accept, override, or ask follow-up before acting on any diagnosis.
 
-PILLAR 3 — Market Connect
-  Harvest estimate based on plot size + crop type
-  Farmgate vs market price comparison with sell/hold advice
-  5 seeded buyers per crop with contacts + WhatsApp messages
-  AI-generated WhatsApp outreach in farmer's language
-  Quality standards + negotiation tips
+Climate-Driven Growing Calendar
+  Personalized season-long calendar: land prep, planting, weeding, fertilizer
+  timing, harvest window. Real-time adaptation: "delay planting 5 days —
+  rains coming late this year." Budget-constrained (stays within RWF limit).
+
+Market Connect
+  Harvest estimate from plot size + crop. Farmgate vs market price (sell now
+  vs hold). 5 seeded buyers per crop with WhatsApp-ready outreach messages
+  generated in farmer's language (Kinyarwanda, Swahili, French).
+
+Neighbor Early Warning
+  If a confirmed disease is detected within 5km radius, all nearby plots
+  receive an alert with the specific threat + prevention steps.
+
+=========================================
+HOW IT WORKS
+=========================================
+1. Farmer registers plot (crop, location, size, planting date, budget)
+2. App generates weekly scout plan + personalized growing calendar
+3. Farmer uploads scout photo -> Gemini diagnoses -> human reviews
+4. Low-confidence results flag for extension officer verification
+5. Market tab shows buyers, prices, and AI-generated WhatsApp messages
+6. Assessment history + follow-up plans track every crop journey
+
+Demo walkthrough: User registers a maize plot in Kigali. System generates
+a scout plan flagging Fall Armyworm risk (cited: FAO). User snaps a leaf
+photo -> Gemini confirms Armyworm, Moderate, with treatment steps. User
+clicks "Send via WhatsApp" -> farmer in Rulindo receives the full report
+in Kinyarwanda. User switches to Market tab -> sees 5 maize buyers, selects
+MINAGRI Grain Reserve, taps WhatsApp -> AI-written outreach message opens.
 
 =========================================
 TECH STACK
 =========================================
-Frontend:  Streamlit + Bootstrap Icons + Inter font
-AI:        Gemini 3.6-flash (vision + text)
-Weather:   Open-Meteo API (free, no key)
-Database:  SQLite
-Languages: English, Kinyarwanda, Swahili, French
-Deploy:    Streamlit Cloud (auto-deploy from GitHub)
+Frontend:   Streamlit + Bootstrap Icons + Inter font
+AI:         Gemini 3.6-flash (vision + text generation)
+Weather:    Open-Meteo API (free, no API key)
+Database:   SQLite (plots, assessments, follow plans, alerts)
+Languages:  English, Kinyarwanda, Swahili, French
+Deploy:     Streamlit Cloud (auto-deploy from GitHub)
+APIs:       WhatsApp Web (free sharing), SMS protocol
 
 =========================================
 BONUS FEATURES (Judging Criteria)
 =========================================
-Human Approval: Low-confidence diagnoses flagged for verification
-Evaluation Metrics: AI confidence score + severity badges
-Personalization: Budget constraint + location-based weather
-Accessibility: Voice, multi-language, SMS/WhatsApp sharing
-
-=========================================
-DEPLOYMENT
-=========================================
-Live: mworozi.streamlit.app
-Cost: $0 — runs on free Streamlit Cloud tier
-Setup: 1 command: streamlit run app.py
+Human Approval: Low-confidence diagnoses require verification before action
+Evaluation: AI confidence score per diagnosis, severity level displayed
+Personalization: Budget constraint, location weather, crop variety
+Accessibility: 4 languages, Voice TTS, SMS for basic phones
 
 =========================================
 WHY THIS WINS
 =========================================
-3 crops, 3 pillars, 4 languages, zero cost
-Full farmer journey: scout → treat → grow → sell
-Weather-adaptive, budget-constrained, scientifically cited
-Works on basic phones (SMS share) to smartphones (WhatsApp + camera)
-Every recommendation cites: FAO, IITA, CGIAR
+  End-to-end farmer journey: Scout -> Diagnose -> Treat -> Grow -> Sell
+  Every claim cited (FAO, IITA, CGIAR, weather API)
+  Works on basic phones (SMS) to smartphones (WhatsApp, camera)
+  Zero cost: free APIs, free deployment tier
+  Built in <12 hours — demo-ready, deployed, tested
+
+=========================================
+TEAM
+=========================================
+[Your Name] — [Your Role]
+[Team Member 2] — [Their Role]
+[Team Member 3] — [Their Role]
