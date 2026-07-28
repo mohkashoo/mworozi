@@ -285,6 +285,25 @@ def get_weather(location: str) -> dict:
 
 WEATHER_ICONS = {0: "☀️", 1: "🌤️", 2: "⛅", 3: "☁️", 45: "🌫️", 51: "🌦️", 61: "🌧️", 80: "🌦️", 95: "⛈️"}
 
+# ── Market Prices (Rwanda / East Africa — estimated per kg in RWF) ──
+MARKET_PRICES = {
+    "Maize": (600, 900), "Beans": (1200, 1800), "Cassava": (300, 500),
+    "Sweet Potato": (400, 700), "Irish Potato": (500, 800), "Banana": (400, 700),
+    "Coffee": (3500, 5500), "Tea": (2500, 4000), "Rice": (1200, 1800),
+    "Soybean": (1000, 1500), "Tomato": (800, 1400), "Cabbage": (300, 600),
+    "Onion": (700, 1200), "Sorghum": (500, 800), "Wheat": (800, 1200),
+}
+
+def get_market_price(crop: str) -> str:
+    price_range = None
+    for key, val in MARKET_PRICES.items():
+        if key.lower() in crop.lower():
+            price_range = val
+            break
+    if price_range:
+        return f"{price_range[0]:,} – {price_range[1]:,} RWF/kg"
+    return "Contact local market"
+
 # ── Twilio WhatsApp Send ───────────────────────────────
 def send_whatsapp(to_number: str, message: str) -> bool:
     """Send WhatsApp message via Twilio."""
@@ -1217,6 +1236,11 @@ if st.session_state.get("analysis_done"):
             <p style='margin:0;color:#e2e8f0'><strong>{res['farmer']}</strong></p>
             <p style='margin:0;color:#94a3b8;font-size:0.85rem'>{res['location']}</p>
             <p style='margin:0;color:#94a3b8;font-size:0.85rem'>{res['crop']}  •  {res['language']}</p>
+        </div>
+        <div class='card'>
+            <div class='card-title'><i class='bi bi-cash-stack'></i> Market Price</div>
+            <p style='color:#e2e8f0;font-size:1.1rem;margin:0'><strong>{get_market_price(res['crop'])}</strong></p>
+            <p style='color:#64748b;font-size:0.7rem;margin:0'>Estimated {res['crop']} price — Kigali market</p>
         </div>
         """, unsafe_allow_html=True)
 
