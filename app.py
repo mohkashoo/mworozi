@@ -192,10 +192,16 @@ def init_treatment_db():
             farmer_name TEXT,
             crop TEXT,
             disease TEXT,
+            original_image_path TEXT DEFAULT '',
             status TEXT DEFAULT 'active',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+    # Add column if missing (for existing DB)
+    try:
+        conn.execute("ALTER TABLE treatment_plans ADD COLUMN original_image_path TEXT DEFAULT ''")
+    except:
+        pass
     conn.execute("""
         CREATE TABLE IF NOT EXISTS progress_updates (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -224,10 +230,10 @@ def init_treatment_db():
     os.makedirs("progress", exist_ok=True)
 
 
-def create_treatment_plan(assessment_id: int, farmer: str, crop: str, disease: str) -> int:
+def create_treatment_plan(assessment_id: int, farmer: str, crop: str, disease: str, orig_image_path: str = "") -> int:
     conn = sqlite3.connect(DB_PATH)
-    conn.execute("INSERT INTO treatment_plans (assessment_id, farmer_name, crop, disease) VALUES (?, ?, ?, ?)",
-                 (assessment_id, farmer, crop, disease))
+    conn.execute("INSERT INTO treatment_plans (assessment_id, farmer_name, crop, disease, original_image_path) VALUES (?, ?, ?, ?, ?)",
+                 (assessment_id, farmer, crop, disease, orig_image_path))
     plan_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
     # Create default tasks
     tasks = TREATMENT_PLANS.get(disease, [("Day 1", "Monitor the crop daily and follow treatment guidelines.")])
@@ -693,6 +699,12 @@ if analyze_btn:
         except Exception:
             pass
 
+        # Save original image for later AI progress comparison
+        os.makedirs("progress", exist_ok=True)
+        orig_path = f"progress/original_{farmer}_{crop_sel}_{int(time.time())}.jpg"
+        with open(orig_path, "wb") as f:
+            f.write(image_bytes)
+
         # Store in session for display
         st.session_state["last_result"] = {
             "disease": disease,
@@ -703,6 +715,8 @@ if analyze_btn:
             "location": loc,
             "language": lang,
             "is_real": is_real,
+            "original_image": image_bytes,
+            "original_image_path": orig_path,
         }
         st.session_state["analysis_done"] = True
         st.rerun()
@@ -838,7 +852,8 @@ if st.session_state.get("analysis_done"):
             row = conn.execute("SELECT id FROM assessments ORDER BY id DESC LIMIT 1").fetchone()
             aid = row[0] if row else 0
             conn.close()
-            plan_id = create_treatment_plan(aid, res["farmer"], res["crop"], res["disease"])
+            orig_path = res.get("original_image_path", "")
+            plan_id = create_treatment_plan(aid, res["farmer"], res["crop"], res["disease"], orig_path)
             st.session_state["treatment_view"] = plan_id
             st.rerun()
     else:
@@ -847,7 +862,8 @@ if st.session_state.get("analysis_done"):
             row = conn.execute("SELECT id FROM assessments ORDER BY id DESC LIMIT 1").fetchone()
             aid = row[0] if row else 0
             conn.close()
-            plan_id = create_treatment_plan(aid, res["farmer"], res["crop"], "Keep Healthy")
+            orig_path = res.get("original_image_path", "")
+            plan_id = create_treatment_plan(aid, res["farmer"], res["crop"], "Keep Healthy", orig_path)
             st.session_state["treatment_view"] = plan_id
             st.rerun()
 
@@ -879,7 +895,7 @@ if st.session_state.get("treatment_view"):
     updates = get_plan_updates(plan_id)
     
     conn = sqlite3.connect(DB_PATH)
-    plan_info = conn.execute("SELECT farmer_name, crop, disease FROM treatment_plans WHERE id = ?", (plan_id,)).fetchone()
+    plan_info = conn.execute("SELECT farmer_name, crop, disease, original_image_path FROM treatment_plans WHERE id = ?", (plan_id,)).fetchone()
     conn.close()
     
     is_healthy = plan_info[2] == "Keep Healthy"
@@ -949,7 +965,13 @@ if st.session_state.get("treatment_view"):
                         WHERE p.id = ? ORDER BY a.id DESC LIMIT 1""", (plan_id,)).fetchone()
                     conn2.close()
                     
-                    verdict = check_progress_with_ai(b"demo", img_bytes, plan_info[1], plan_info[2])
+                    # Load original image for AI comparison
+                    orig_img_bytes = b"demo"
+                    orig_path = plan_info[3] if len(plan_info) > 3 else ""
+                    if orig_path and os.path.exists(orig_path):
+                        with open(orig_path, "rb") as of:
+                            orig_img_bytes = of.read()
+                    verdict = check_progress_with_ai(orig_img_bytes, img_bytes, plan_info[1], plan_info[2])
                     
                     add_progress_update(plan_id, next_task['stage'], len(updates)+1, img_path, notes or "")
                     conn3 = sqlite3.connect(DB_PATH)
