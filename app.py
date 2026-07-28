@@ -597,24 +597,27 @@ if st.session_state.get("analysis_done"):
         if res["treatment"]:
             st.markdown(res["treatment"])
 
-            # Voice button
-            if st.button("🔊 Listen to Treatment (Audio)", key="voice_btn", use_container_width=True):
-                with st.spinner("Generating audio…"):
-                    try:
-                        from gtts import gTTS
-                        import io as tts_io
-                        # Take first 1000 chars for voice
-                        text_for_voice = res["treatment"].replace("##", "").replace("*", "")[:1000]
-                        lang_map = {"English": "en", "Kinyarwanda": "rw", "Swahili": "sw", "French": "fr"}
-                        tts_lang = lang_map.get(res.get("language", "English"), "en")
-                        tts = gTTS(text=text_for_voice, lang=tts_lang, slow=False)
-                        buf = tts_io.BytesIO()
-                        tts.write_to_fp(buf)
-                        buf.seek(0)
-                        st.audio(buf, format="audio/mp3")
-                        st.success("🔊 Playing treatment instructions — listen and share with the farmer")
-                    except Exception as e:
-                        st.warning(f"Voice generation unavailable: {e}")
+            # Voice — browser Speech Synthesis via HTML component (bypasses CSP)
+            voice_text = res["treatment"].replace("`", "'").replace("$", "").replace("\\", "")[:600]
+            voice_lang = {"English": "en", "Kinyarwanda": "rw", "Swahili": "sw", "French": "fr"}.get(res.get("language", "English"), "en")
+            voice_html = f"""
+            <div style="margin-top:0.75rem">
+                <button onclick="speakNow()" style="width:100%;padding:0.6rem;border-radius:8px;border:1px solid #10b981;background:transparent;color:#10b981;cursor:pointer;font-size:0.9rem">
+                    🔊 Listen — Hear Treatment in {res.get("language", "English")}
+                </button>
+            </div>
+            <script>
+            function speakNow() {{
+                var msg = new SpeechSynthesisUtterance();
+                msg.text = `{voice_text}`;
+                msg.lang = '{voice_lang}';
+                msg.rate = 0.9;
+                window.speechSynthesis.cancel();
+                window.speechSynthesis.speak(msg);
+            }}
+            </script>
+            """
+            st.components.v1.html(voice_html, height=60)
         else:
             st.markdown("*No analysis available. Please try again with a clearer image.*")
 
@@ -631,17 +634,6 @@ if st.session_state.get("analysis_done"):
     </div>
     """, unsafe_allow_html=True)
 
-    # ── Assessment ledger ─────────────────────────────
-    st.markdown("<div class='card'><div class='card-title'>"
-                "<i class='bi bi-database'></i> Assessment History</div>", unsafe_allow_html=True)
-    ledger = get_assessments()
-    if not ledger.empty:
-        ledger.columns = ["Farmer", "Location", "Crop", "Issue", "Severity", "Date"]
-        st.dataframe(ledger, use_container_width=True, hide_index=True)
-    else:
-        st.markdown("<span style='color:#64748b'><i class='bi bi-database'></i> No assessments yet.</span>", unsafe_allow_html=True)
-    st.markdown("</div>", unsafe_allow_html=True)
-
 else:
     # ── Empty state ───────────────────────────────────
     st.markdown("""
@@ -654,3 +646,15 @@ else:
         </p>
     </div>
     """, unsafe_allow_html=True)
+
+
+# ── Assessment ledger (always visible) ────────────────
+st.markdown("<div class='card'><div class='card-title'>"
+            "<i class='bi bi-database'></i> Assessment History</div>", unsafe_allow_html=True)
+ledger = get_assessments()
+if not ledger.empty:
+    ledger.columns = ["Farmer", "Location", "Crop", "Issue", "Severity", "Date"]
+    st.dataframe(ledger, use_container_width=True, hide_index=True)
+else:
+    st.markdown("<span style='color:#64748b'><i class='bi bi-database'></i> No assessments yet. Run an analysis to populate the history.</span>", unsafe_allow_html=True)
+st.markdown("</div>", unsafe_allow_html=True)
