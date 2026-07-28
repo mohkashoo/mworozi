@@ -1286,6 +1286,8 @@ if st.session_state.get("analysis_done"):
                             tts = gTTS(text=voice_text, lang=voice_lang_code, slow=False)
                             tts.save(voice_path)
                             st.rerun()
+                        except ImportError:
+                            st.warning("Voice unavailable — installing gTTS dependency on next deploy.")
                         except Exception as e:
                             st.warning(f"Could not generate audio: {e}")
         else:
