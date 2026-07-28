@@ -319,6 +319,25 @@ with st.sidebar:
             st.rerun()
     
     st.markdown("---")
+    
+    # Quick photo analysis (always available)
+    st.markdown("### 📷 Quick Crop Scan")
+    img_src = st.radio("", ["📁 Upload", "📸 Camera"], key="quick_img_src", label_visibility="collapsed", horizontal=True)
+    cam_img = st.camera_input("Take photo", key="quick_cam") if "Camera" in img_src else None
+    up_file = st.file_uploader("Upload crop photo", type=["jpg","jpeg","png"], key="quick_upload") if "Upload" in img_src else None
+    
+    if cam_img:
+        img_bytes = cam_img.read()
+        with st.spinner("Analyzing..."):
+            result = ask_gemini_vision(img_bytes, f"Analyze this crop image. Identify: 1) Crop type 2) Disease/pest 3) Severity 4) Action. Keep it under 150 words.", 300)
+            st.markdown(f"<div class='card' style='padding:0.75rem'><p style='color:#e2e8f0;font-size:0.85rem'>{result or 'No result — check Gemini API key.'}</p></div>", unsafe_allow_html=True)
+    if up_file:
+        img_bytes = up_file.read()
+        with st.spinner("Analyzing..."):
+            result = ask_gemini_vision(img_bytes, f"Analyze this crop image. Identify: 1) Crop type 2) Disease/pest 3) Severity 4) Action. Keep it under 150 words.", 300)
+            st.markdown(f"<div class='card' style='padding:0.75rem'><p style='color:#e2e8f0;font-size:0.85rem'>{result or 'No result — check Gemini API key.'}</p></div>", unsafe_allow_html=True)
+    
+    st.markdown("---")
     st.markdown(f"<span style='color:#10b981'><i class='bi bi-cpu'></i> {t('gemini_on' if gemini_client else 'gemini_off')}</span>", unsafe_allow_html=True)
 
 # ── Title ────────────────────────────────────────────────
