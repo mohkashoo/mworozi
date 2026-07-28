@@ -89,6 +89,10 @@ T = {
         "overall_progress": "Overall Progress",
         "tasks": "tasks",
         "check_progress": "Check Progress — All Assessments",
+        "checklist_history": "Checklist History — Active Plans",
+        "recovery_label": "Recovery",
+        "keep_healthy_label": "Keep Healthy",
+        "completed": "completed",
         "check_progress_desc": "Select an assessment below to start or continue a recovery checklist for that plant.",
         "continue_btn": "Continue",
         "treat_btn": "Treat This Plant",
@@ -1379,6 +1383,45 @@ if not all_ledger.empty:
                         pid = create_treatment_plan(aid, row['farmer_name'], row['crop'], disease_label)
                         st.session_state["treatment_view"] = pid
                         st.rerun()
+            st.markdown("<hr style='margin:0.25rem 0;border-color:#1e293b'>", unsafe_allow_html=True)
+else:
+    st.markdown(f"<p style='color:#64748b'>{t('no_assessments')}</p>", unsafe_allow_html=True)
+
+
+# ══════════════════════════════════════════════════════════
+# CHECKLIST HISTORY — All active plans
+# ══════════════════════════════════════════════════════════
+st.markdown("---")
+st.markdown(f"<h3 style='color:#10b981'><i class='bi bi-list-check'></i> {t('checklist_history')}</h3>", unsafe_allow_html=True)
+
+all_plans = get_active_plans()
+if all_plans:
+    for plan in all_plans:
+        tasks = get_plan_tasks(plan['id'])
+        done = sum(1 for t in tasks if t['completed'])
+        total = len(tasks)
+        pct = int((done / total) * 100) if total > 0 else 0
+        is_healthy = "Keep Healthy" in str(plan.get('disease', ''))
+        plan_type = t('keep_healthy_label') if is_healthy else t('recovery_label')
+        icon = "🌿" if is_healthy else "🌱"
+        color = "#10b981" if pct >= 75 else ("#f59e0b" if pct >= 25 else "#ef4444")
+
+        with st.container():
+            c1, c2, c3, c4, c5, c6 = st.columns([1.5, 1, 0.8, 1, 1, 1.5])
+            with c1: st.markdown(f"<span style='color:#e2e8f0'>{plan['farmer']}</span>", unsafe_allow_html=True)
+            with c2: st.markdown(f"<span style='color:#10b981'>{plan['crop']}</span>", unsafe_allow_html=True)
+            with c3: st.markdown(f"<span style='color:#94a3b8;font-size:0.8rem'>{icon} {plan_type}</span>", unsafe_allow_html=True)
+            with c4: st.markdown(f"<span style='color:{color};font-weight:600'>{pct}%</span>", unsafe_allow_html=True)
+            with c5:
+                st.markdown(f"""
+                <div style='background:#1e293b;border-radius:99px;height:6px;margin-top:8px'>
+                    <div style='background:{color};border-radius:99px;height:6px;width:{pct}%'></div>
+                </div>
+                """, unsafe_allow_html=True)
+            with c6:
+                if st.button(f"Open Plan", key=f"hist_plan_{plan['id']}", use_container_width=True):
+                    st.session_state["treatment_view"] = plan['id']
+                    st.rerun()
             st.markdown("<hr style='margin:0.25rem 0;border-color:#1e293b'>", unsafe_allow_html=True)
 else:
     st.markdown(f"<p style='color:#64748b'>{t('no_assessments')}</p>", unsafe_allow_html=True)
