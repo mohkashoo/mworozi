@@ -1,89 +1,160 @@
-**MWOROZI  AI Crop Health Assistant**  
-**Mworozi** ("farmer" in Kinyarwanda) is an AI-powered crop health platform that helps farmers detect diseases, receive structured treatment plans, and track crop recovery through visual progress monitoring. Designed for low-resource agricultural settings in East Africa.  
-Built for the Frontiers GenAI Hackathon 2026 — Track 01: Agriculture & BioSystems.  
-![](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAnEAAAACCAYAAAA3pIp+AAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAANUlEQVR4nO3OQQmAABRAsSdYxZ4/mJjEsxE8W8GbCFuCLTOzVXsAAPzFuVZ3dXw9AQDgtesBxPEF3bv7x0IAAAAASUVORK5CYII=)  
-**Architecture**  
-Farmer uploads crop photo → Gemini Vision analyzes for disease  
-     → Returns: disease ID, severity, treatment, prevention  
-     → Optional: create treatment plan with staged tasks  
-     → Each stage: upload follow-up photo → AI compares progress  
-     → Dashboard tracks recovery across all active plans  
-   
-![](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAnEAAAACCAYAAAA3pIp+AAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAANklEQVR4nO3OMQ2AABAAsSNBCUpfDq4wwIAABiywEZJWQZeZ2ao9AAD+4liruzq/ngAA8Nr1ABweBgdur/QFAAAAAElFTkSuQmCC)  
-**Features**  
-- **Crop Disease Detection** - Upload a photo; Gemini Vision identifies diseases, pests, or nutrient deficiencies  
-- **Demo Samples** - Pre-loaded disease cases (Maize Blight, Cassava Mosaic Virus, Tomato Late Blight) for offline demonstration  
-- **Multi-Language Support** - Results in English, Kinyarwanda, Swahili, or French  
-- **Voice Playback** - Browser-native Speech Synthesis reads treatment instructions aloud in the farmer's language. No internet required.  
-- **Smart Treatment Plan** - Auto-generates a staged recovery timeline (Day 1 to Day 14) with disease-specific tasks  
-- **Progress Check-Ins** - Farmer uploads a follow-up photo at each stage  
-- **AI Progress Tracking** - Gemini compares before/after images and classifies: improving, stable, or worsening  
-- **Treatment Dashboard** - Overview of all active plans with recovery metrics  
-- **Assessment Ledger** - Persistent SQLite database of all diagnoses, visible on every page load  
-- **Fallback Mode** - If Gemini API quota is exceeded or network is unavailable, the app continues with pre-loaded demo data  
-- **Mobile-Compatible** - Streamlit renders on phones and tablets  
-![](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAnEAAAACCAYAAAA3pIp+AAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAANUlEQVR4nO3OMQ2AABAAsSNhwgJmkPYLLpnRgQU2QtIq6DIze3UGAMBf3Gu1VcfHEQAA3rseaHkEMn1wK7sAAAAASUVORK5CYII=)  
-**Technology Stack**  
-| | | |  
-|-|-|-|  
-| **Component** | **Technology** | **Role** |   
-| Frontend | Streamlit | Web application framework |   
-| AI Vision | Google Gemini (gemini-flash-latest) | Disease detection from crop photos |   
-| AI Comparison | Google Gemini | Before/after image analysis for progress tracking |   
-| Voice | Web Speech API | Text-to-speech in farmer's language (offline-capable) |   
-| Database | SQLite | Assessments, treatment plans, progress records |   
-| Image Generation | Pillow | Synthetic diseased leaf images for demo |   
-| Data | Pandas | Query and display assessment history |   
-| Icons | Bootstrap Icons | UI icon set |   
-| Configuration | python-dotenv | Environment variable loading |   
-| Styling | Custom CSS | Dark theme (#090a0f / #10b981 / #ef4444) |   
-   
-![](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAnEAAAACCAYAAAA3pIp+AAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAANUlEQVR4nO3OMQ2AABAAsSPBCj7fFjsymJHAjAU2QtIq6DIzW7UHAMBfnGt1V8fXEwAAXrsexNkF4H1/HJoAAAAASUVORK5CYII=)  
-**Project Structure**  
-.  
- ├── app.py                 # Application entry point  
- ├── requirements.txt       # Python dependencies  
- ├── .env                   # API credentials (not committed)  
- ├── .env.example           # Configuration template  
- ├── .gitignore  
- ├── .streamlit/  
- │   └── config.toml        # Streamlit theme configuration  
- ├── progress/              # Treatment plan check-in photos  
- └── README.md  
-   
-![](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAnEAAAACCAYAAAA3pIp+AAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAAM0lEQVR4nO3OMQ0AIAwAwZKQ6kBqjSAOJywYYCIkd9OP36pqRMQMAAB+sfqJfLoBAMCN3NYoAzBA+QG0AAAAAElFTkSuQmCC)  
-**Setup**  
-pip install -r requirements.txt  
- export GEMINI_API_KEY="your-key-here"  
- export GEMINI_MODEL="gemini-flash-latest"  
- streamlit run app.py  
-   
-The application functions without an API key using built-in demo data. API access enables live image analysis.  
-![](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAnEAAAACCAYAAAA3pIp+AAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAANUlEQVR4nO3OMQ2AABAAsSNhwgJWEPcbJpnRgQU2QtIq6DIze3UGAMBf3Gu1VcfXEwAAXrseaIkEMIPgIvAAAAAASUVORK5CYII=)  
-**Demo Samples**  
-| | | |  
-|-|-|-|  
-| **Crop** | **Disease** | **Severity** |   
-| Maize | Northern Corn Leaf Blight | Moderate |   
-| Cassava | Cassava Mosaic Virus | Severe |   
-| Tomato | Late Blight | Severe |   
-   
-Each generates a synthetic leaf image with disease symptoms for demonstration.  
-![](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAnEAAAACCAYAAAA3pIp+AAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAANklEQVR4nO3OQQmAABRAsScYxpg/h5VMYARvRrCCNxG2BFtmZquOAAD4i3Ot7mr/egIAwGvXA224BcUMk6pDAAAAAElFTkSuQmCC)  
-**Treatment Plan Stages**  
-| | |  
-|-|-|  
-| **Stage** | **Task** |   
-| Day 1 | Remove affected material, apply initial treatment |   
-| Day 3 | Re-apply treatment, monitor for new symptoms |   
-| Day 7 | Apply secondary (organic) option, continue monitoring |   
-| Day 14 | Final assessment: recovery confirmed or requires re-treatment |   
-   
-Each stage accepts a follow-up photograph. AI analysis compares it to the initial image and reports: improving, stable, or worsening.  
-![](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAnEAAAACCAYAAAA3pIp+AAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAANklEQVR4nO3OMQ2AABAAsSNBCkLfFDZwwIgHRiywEZJWQZeZ2ao9AAD+4lyruzq+ngAA8Nr1AOH0BedHjjlfAAAAAElFTkSuQmCC)  
-**Limitations**  
-- Treatment recommendations are AI-generated and should be verified with a local agricultural extension officer  
-- Diagnostic accuracy depends on image quality  
-- Voice synthesis quality depends on browser and operating system language support  
-![](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAnEAAAACCAYAAAA3pIp+AAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAANElEQVR4nO3OMQ0AIAwAwZIgBKn1gjJsdGLBABMhuZt+/JaZIyJmAADwi9VP1NMNAABu1AaU4gUeBSGW2wAAAABJRU5ErkJggg==)  
-*Frontiers GenAI Hackathon 2026 — ALX Kigali, Rwanda*  
+# MWOROZI — AI Crop Health Assistant
+
+**Mworozi** ("farmer" in Kinyarwanda) is an AI-powered crop health platform that helps farmers detect diseases, receive structured treatment plans, and track crop recovery through visual progress monitoring. Designed for low-resource agricultural settings in East Africa.
+
+Built for the Frontiers GenAI Hackathon 2026 — Track 01: Agriculture & BioSystems. In collaboration with Google DeepMind.
+
+---
+
+## Architecture
+
+```
+Farmer uploads/takes crop photo → Gemini Vision analyzes for disease
+    → Returns: disease, severity, treatment, prevention
+    → Start Recovery Checklist or Keep Healthy Checklist
+    → Chat-style treatment view with staged tasks
+    → Each stage: upload follow-up photo → AI compares before/after
+    → Verdict: improving / stable / worsening
+    → Dashboard tracks recovery across all plants
+```
+
+---
+
+## Features
+
+| Feature | Description |
+|---------|-------------|
+| **Disease Detection** | Upload a photo or take one with the camera. Gemini Vision identifies diseases, pests, or nutrient deficiencies |
+| **Three Input Methods** | Camera capture, file upload, or pre-loaded demo samples |
+| **Demo Samples** | Pre-loaded disease cases (Maize Blight, Cassava Mosaic Virus, Tomato Late Blight) for offline demonstration |
+| **Multi-Language** | Results in English, Kinyarwanda, Swahili, or French |
+| **Voice Playback** | gTTS reads treatment aloud in the farmer's language with speed control (0.75x, 1x, 1.25x, 1.5x) |
+| **Smart Treatment Plans** | Two types: Recovery Checklist (diseased plants) and Keep It Healthy Checklist (disease prevention) |
+| **Chat-Style Progress** | Each plant gets a dedicated chat view. Upload photos, add notes, AI replies with analysis |
+| **AI Progress Tracking** | Gemini Vision compares original assessment photo against follow-up photos, classifying: improving, stable, or worsening |
+| **Check Progress Section** | Lists all assessments. Click any to open its treatment plan or start one |
+| **Evaluation Metrics** | AI confidence score, severity level, and seasonal context displayed with every diagnosis |
+| **Personalization** | Farmers select resource preference (organic/chemical/both), current season, and location |
+| **Assessment Ledger** | Full SQLite database of all diagnoses with farmer, crop, disease, severity, and date |
+| **Fallback Mode** | If Gemini quota is exceeded or network is unavailable, the app continues with pre-loaded demo data |
+| **Smooth Modern UI** | Inter font, card hover animations, gradient backgrounds, slide-in alerts, glow effects |
+| **Mobile-Compatible** | Streamlit renders on phones and tablets. Camera capture works on mobile browsers |
+
+---
+
+## Technology Stack
+
+| Component | Technology | Role |
+|-----------|-----------|------|
+| Frontend | Streamlit 1.60 | Web application framework |
+| UI/UX | Custom CSS + Inter font + Bootstrap Icons | Animations, gradients, hover effects |
+| AI Vision | Gemini 3.6-flash | Disease detection from crop photos |
+| AI Comparison | Gemini 3.6-flash | Before/after image analysis for progress tracking |
+| Voice | gTTS | Text-to-speech in farmer's language with speed control |
+| Database | SQLite + Pandas | Assessments, treatment plans, progress records |
+| Image Generation | Pillow | Synthetic diseased leaf images for demo |
+| Configuration | python-dotenv | Environment variable loading |
+| Version Control | Git + GitHub | Team collaboration |
+
+---
+
+## Project Structure
+
+```
+.
+├── app.py                 # Application entry point
+├── requirements.txt       # Python dependencies
+├── .env                   # API credentials (not committed)
+├── .env.example           # Environment variable template
+├── .gitignore
+├── .streamlit/
+│   └── config.toml        # Streamlit theme configuration
+├── ONE-PAGER.txt          # Pitch presentation text
+├── ETHICS.md              # Ethics & accessibility brief
+├── progress/              # Assessment images + treatment check-in photos
+└── README.md
+```
+
+---
+
+## Setup
+
+```bash
+pip install -r requirements.txt
+export GEMINI_API_KEY="your-key-here"
+export GEMINI_MODEL="gemini-3.6-flash"
+streamlit run app.py
+```
+
+The application functions without an API key using built-in demo data. API access enables live image analysis and AI progress tracking.
+
+---
+
+## Demo Samples
+
+| Crop | Disease | Severity |
+|------|---------|----------|
+| Maize | Northern Corn Leaf Blight | Moderate |
+| Cassava | Cassava Mosaic Virus | Severe |
+| Tomato | Late Blight | Severe |
+
+Each generates a synthetic leaf image with disease symptoms for demonstration.
+
+---
+
+## Treatment Plan Stages
+
+| Stage | Task |
+|-------|------|
+| Day 1 | Remove affected material, apply initial treatment |
+| Day 3 | Re-apply treatment, monitor for new symptoms |
+| Day 7 | Apply secondary (organic) option, continue monitoring |
+| Day 14 | Final assessment: recovery confirmed or requires re-treatment |
+
+Each stage accepts a follow-up photograph. AI compares it to the original assessment image and reports: improving, stable, or worsening.
+
+---
+
+## Keep It Healthy Checklist
+
+| Stage | Task |
+|-------|------|
+| Week 1 | Water regularly. Check for pests under leaves. Remove weeds |
+| Week 2 | Apply organic compost or fertilizer. Monitor for yellowing |
+| Week 3 | Check soil moisture. Look for signs of disease or nutrient deficiency |
+| Week 4 | Monthly assessment. Rotate crop next season for soil health |
+
+---
+
+## Evaluation Metrics
+
+| Metric | Details |
+|--------|---------|
+| AI Confidence | Percentage confidence in diagnosis (displayed after every analysis) |
+| Severity | Mild / Moderate / Severe — determines treatment urgency |
+| Recovery Rate | Percentage of check-ins marked "improving" vs total |
+| Seasonal Context | Planting / Growing / Harvest / Dry — constrains treatment advice |
+| Resource Preference | Organic only / Chemical only / Both — personalized recommendations |
+
+---
+
+## Limitations
+
+- Treatment recommendations are AI-generated and should be verified with a local agricultural extension officer
+- Diagnostic accuracy depends on image quality (clear, well-lit, focused on affected area)
+- Voice playback requires internet on first generation; cached locally for replay
+- Gemini API free tier: approximately 60 requests per minute
+
+---
+
+## Bonus Features (Judging Criteria)
+
+| Criterion | Implementation |
+|-----------|---------------|
+| **Human Approval Step** | Every treatment plan requires user confirmation before creation |
+| **Evaluation Metrics** | AI confidence, severity, recovery rate displayed on dashboard |
+| **Personalization with Constraints** | Resource preference, season, location, and crop type constrain all recommendations |
+
+---
+
+*Frontiers GenAI Hackathon 2026 — ALX Kigali, Rwanda — In collaboration with Google DeepMind*
