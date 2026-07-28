@@ -156,7 +156,6 @@ Each stage accepts a follow-up photograph. AI compares it to the original assess
 
 | Criterion | Implementation |
 |-----------|---------------|
-| Human Approval Step | Every treatment plan requires user confirmation before creation |
 | Evaluation Metrics | AI confidence, severity, recovery rate displayed on dashboard |
 | Personalization with Constraints | Resource preference, season, location, and crop type constrain all recommendations |
 

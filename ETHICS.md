@@ -12,7 +12,7 @@ Mworozi puts an AI crop health assistant in every farmer's pocket. Upload a phot
 
 ### 1. Human-in-the-Loop (AI as Assistant, Not Decision-Maker)
 
-The app never bypasses human judgment. Every AI diagnosis includes a mandatory "Extension Officer Review" step where a human must explicitly approve or reject the recommendation before a treatment plan is created. The AI advises — the farmer or officer decides.
+The app never bypasses human judgment. Every AI diagnosis is presented alongside confidence metrics, severity level, and seasonal context. The farmer or officer reviews the recommendation and decides whether to start a treatment plan. The AI advises -- the farmer or officer decides.
 
 ### 2. Bias and Fairness
 
@@ -75,9 +75,6 @@ The app is designed for users across the literacy and age spectrum:
 ---
 
 ## Bonus Features
-
-### Human Approval Step
-Every treatment plan requires explicit approval from an extension officer or informed farmer before creation. The AI diagnosis is presented for review alongside confidence metrics. The user can either approve and start the plan or reject and flag for expert consultation.
 
 ### Evaluation Metrics
 - **AI Confidence Score**: Displayed with every diagnosis to indicate certainty level
