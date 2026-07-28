@@ -1304,7 +1304,7 @@ if st.session_state.get("analysis_done"):
             clean_lines.append(f'  {line}')
         elif line and not line.startswith('(') and not line.startswith('If'):
             clean_lines.append(line)
-    clean_treatment = '\n'.join(clean_lines)[:600]
+    clean_treatment = '\n'.join(clean_lines)  # No truncation — full treatment
 
     # Build full treatment steps
     steps_text = ""
@@ -1314,9 +1314,9 @@ if st.session_state.get("analysis_done"):
             disease_for_plan = plan_key
             break
     if disease_for_plan in TREATMENT_PLANS:
-        steps_text = "\n\n📋 Recovery Steps:\n"
+        steps_text = "\n\n📋 Recovery Plan (Follow These Steps):\n"
         for stage, task in TREATMENT_PLANS[disease_for_plan]:
-            steps_text += f"\n  ✅ {stage}: {task}"
+            steps_text += f"\n  {stage}: {task}"
 
     share_text = f"🌱 Mworozi AI Diagnosis\n\n🌾 Crop: {res['crop']}\n🦠 Disease: {res['disease']}\n⚠️ Severity: {res['severity']}\n\n💊 Treatment:\n{clean_treatment}{steps_text}"
 
@@ -1329,16 +1329,16 @@ if st.session_state.get("analysis_done"):
             with st.spinner(f"Translating to {share_lang}..."):
                 resp = gemini_client.models.generate_content(
                     model=GEMINI_MODEL,
-                    contents=f"Translate the following crop diagnosis into {share_lang}. Keep the emojis and structure exactly the same. Only translate the text:\n\n{share_text}",
-                    config={"temperature": 0.2, "max_output_tokens": 1000}
+                    contents=f"Translate this crop diagnosis into {share_lang}. IMPORTANT: Keep ALL emojis (🌱🌾🦠⚠️💊📋✅) exactly as they are. Keep the exact same structure and line breaks. Only translate the English words. Do not add or remove any emojis:\n\n{share_text}",
+                    config={"temperature": 0.2, "max_output_tokens": 1500}
                 )
                 final_text = resp.text
         except Exception:
-            pass  # Fall back to English
+            pass
 
     # URL-encode for the WhatsApp/SMS links
     import urllib.parse
-    wa_url = f"https://wa.me/?text={urllib.parse.quote(final_text[:1200])}"
+    wa_url = f"https://wa.me/?text={urllib.parse.quote(final_text[:1800])}"
     sms_url = f"sms:?body={urllib.parse.quote(final_text[:400])}"
     col_share, col_sms, col_csv = st.columns([1, 1, 1])
     with col_share:
