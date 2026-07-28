@@ -522,7 +522,7 @@ init_db()
 init_treatment_db()
 
 # ── Session state ─────────────────────────────────────────
-for key in ("analysis_done", "last_result"):
+for key in ("analysis_done", "last_result", "treatment_view"):
     if key not in st.session_state:
         st.session_state[key] = None if key != "analysis_done" else False
 
@@ -543,6 +543,18 @@ with c2:
         "Rwanda / East Africa</span></p>",
         unsafe_allow_html=True,
     )
+
+# ── Navigation ──────────────────────────────────────────
+nav_col1, nav_col2, nav_col3 = st.columns([1, 1, 4])
+with nav_col1:
+    if st.button("📊 Dashboard", key="nav_dash", use_container_width=True,
+                 type="secondary" if st.session_state.get("treatment_view") else "primary"):
+        st.session_state["treatment_view"] = None
+        st.rerun()
+with nav_col2:
+    if st.button("🌱 Check Progress", key="nav_progress", use_container_width=True,
+                 type="primary" if st.session_state.get("treatment_view") else "secondary"):
+        pass  # Will scroll to the check progress section
 
 st.markdown("---")
 
@@ -792,7 +804,7 @@ if st.session_state.get("analysis_done"):
         st.markdown("</div>", unsafe_allow_html=True)
 
     # ── Evaluation Metrics ─────────────────────────────
-    confidence = 85 if GEMINI_AVAILABLE else 72  # Simulated confidence
+    confidence = 85 if GEMINI_AVAILABLE else 72
     st.markdown(f"""
     <div style='display:flex;gap:1rem;margin-bottom:0.5rem'>
         <div class='card' style='flex:1;text-align:center;padding:0.75rem'>
@@ -810,97 +822,16 @@ if st.session_state.get("analysis_done"):
     </div>
     """, unsafe_allow_html=True)
 
-    # ── Human Approval Step ────────────────────────────
-    st.markdown("---")
-    st.markdown("<h3 style='color:#0ea5e9'><i class='bi bi-person-check'></i> Extension Officer Review</h3>", unsafe_allow_html=True)
-    st.markdown(f"<p style='color:#94a3b8;font-size:0.85rem'>Review the AI diagnosis before creating a treatment plan. This ensures a human expert validates the recommendation.</p>", unsafe_allow_html=True)
-
-    col_app, col_rej = st.columns([1, 1])
-    with col_app:
-        approved = st.button("✅ Approve — Start Treatment Plan", key="approve_plan", type="primary", use_container_width=True)
-    with col_rej:
-        rejected = st.button("❌ Reject — Request Human Expert", key="reject_plan", use_container_width=True)
-
-    if approved:
-        conn = sqlite3.connect(DB_PATH)
-        row = conn.execute("SELECT id FROM assessments ORDER BY id DESC LIMIT 1").fetchone()
-        aid = row[0] if row else 0
-        conn.close()
-        plan_id = create_treatment_plan(aid, res["farmer"], res["crop"], res["disease"])
-        st.session_state["active_plan_id"] = plan_id
-        st.success("Treatment plan approved and created. Follow the recovery timeline below.")
-        st.rerun()
-
-    if rejected:
-        st.info("Diagnosis flagged for human expert review. A local extension officer will be notified.")
-
-    # ── Show active treatment plan ─────────────────────
+    # ── Start Checklist Button ─────────────────────────
     if res["severity"] != "None":
-        active_plan_id = st.session_state.get("active_plan_id", None)
-
-        all_plans = get_active_plans()
-        if all_plans and not active_plan_id:
-            plan_options = {f"{p['farmer']} — {p['crop']} ({p['disease'][:30]})": p['id'] for p in all_plans}
-            selected_plan_label = st.selectbox("View existing plan:", list(plan_options.keys()), key="plan_selector")
-            active_plan_id = plan_options[selected_plan_label]
-
-        if active_plan_id:
-            tasks = get_plan_tasks(active_plan_id)
-            updates = get_plan_updates(active_plan_id)
-
-            st.markdown("<div class='card'><div class='card-title'><i class='bi bi-list-check'></i> Recovery Timeline</div>", unsafe_allow_html=True)
-
-            for i, task in enumerate(tasks):
-                done = task["completed"]
-                icon = "✅" if done else "⏳"
-                style = "color:#10b981" if done else "color:#94a3b8"
-                st.markdown(f"""
-                <div style='padding:0.5rem 0;border-bottom:1px solid #1e293b'>
-                    <span style='{style}'><strong>{icon} {task['stage']}:</strong> {task['task']}</span>
-                </div>
-                """, unsafe_allow_html=True)
-
-                # Check if there's an update with image for this task
-                task_update = next((u for u in updates if u['stage'] == task['stage']), None)
-                if task_update:
-                    img_path = task_update.get('image')
-                    if img_path and os.path.exists(img_path):
-                        st.image(img_path, width=200, caption=f"Day {task_update['day']} check-in")
-                    v = task_update.get('verdict', 'pending')
-                    if v == 'improving':
-                        st.markdown(f"<span style='color:#10b981'>✅ {v} — treatment is working!</span>", unsafe_allow_html=True)
-                    elif v == 'stable':
-                        st.markdown(f"<span style='color:#f59e0b'>⏸ {v} — no change detected</span>", unsafe_allow_html=True)
-                    elif v == 'worsening':
-                        st.markdown(f"<span style='color:#ef4444'>🔴 {v} — needs stronger treatment</span>", unsafe_allow_html=True)
-
-                # Upload button for this task (if not completed)
-                if not done:
-                    with st.expander(f"📷 Upload check-in for {task['stage']}"):
-                        up_img = st.file_uploader(f"Photo of {res['crop']} on {task['stage']}",
-                                                  type=["jpg", "jpeg", "png"], key=f"up_img_{task['id']}")
-                        notes = st.text_area("Your notes (optional):", key=f"notes_{task['id']}")
-                        if st.button(f"Submit {task['stage']} check-in", key=f"submit_{task['id']}"):
-                            if up_img:
-                                img_bytes = up_img.read()
-                                img_path = f"progress/plan_{active_plan_id}_{task['stage'].replace(' ','_')}.jpg"
-                                with open(img_path, "wb") as f:
-                                    f.write(img_bytes)
-                                # AI progress check if original image exists
-                                verdict = "pending"
-                                if image_bytes:
-                                    verdict = check_progress_with_ai(image_bytes, img_bytes, res["crop"], res["disease"])
-                                add_progress_update(active_plan_id, task['stage'], i+1, img_path, notes or "")
-                                conn = sqlite3.connect(DB_PATH)
-                                conn.execute("UPDATE plan_tasks SET completed = 1 WHERE id = ?", (task['id'],))
-                                conn.commit()
-                                conn.close()
-                                st.success(f"{verdict}! Progress saved.")
-                                st.rerun()
-                            else:
-                                st.warning("Please upload a photo.")
-
-            st.markdown("</div>", unsafe_allow_html=True)
+        if st.button("🌱 Start Recovery Checklist for This Plant", key="start_checklist", type="primary", use_container_width=True):
+            conn = sqlite3.connect(DB_PATH)
+            row = conn.execute("SELECT id FROM assessments ORDER BY id DESC LIMIT 1").fetchone()
+            aid = row[0] if row else 0
+            conn.close()
+            plan_id = create_treatment_plan(aid, res["farmer"], res["crop"], res["disease"])
+            st.session_state["treatment_view"] = plan_id
+            st.rerun()
 
 else:
     # ── Empty state ───────────────────────────────────
@@ -916,36 +847,143 @@ else:
     """, unsafe_allow_html=True)
 
 
-# ── Treatment Plan Dashboard ──────────────────────────
-st.markdown("---")
-st.markdown("<h3 style='color:#10b981'><i class='bi bi-clipboard2-pulse'></i> Treatment Plan Dashboard</h3>", unsafe_allow_html=True)
-all_plans = get_active_plans()
-if all_plans:
-    cols = st.columns(min(4, len(all_plans)))
-    for i, plan in enumerate(all_plans[:4]):
-        with cols[i % 4]:
-            pct = int((plan['improving'] / max(plan['updates'], 1)) * 100) if plan['updates'] > 0 else 0
-            color = "#10b981" if pct >= 60 else ("#f59e0b" if pct >= 30 else "#ef4444")
-            st.markdown(f"""
-            <div class='card' style='text-align:center'>
-                <p style='color:#10b981;font-size:1.5rem;margin:0'>{plan['crop']}</p>
-                <p style='color:#94a3b8;font-size:0.8rem;margin:0'>{plan['farmer']}</p>
-                <p style='color:{color};font-size:1.2rem;margin:0.5rem 0'>{pct}%</p>
-                <p style='color:#94a3b8;font-size:0.75rem;margin:0'>
-                {plan['updates']} check-ins • {plan['improving']} improving</p>
-                <p style='color:{color};font-size:0.75rem;margin:0'>{plan['status'].upper()}</p>
-            </div>
-            """, unsafe_allow_html=True)
-else:
-    st.markdown("<p style='color:#64748b'>No active treatment plans. Run an analysis and start a plan to track crop recovery.</p>", unsafe_allow_html=True)
+# ══════════════════════════════════════════════════════════
+# TREATMENT VIEW — dedicated page for one plant
+# ══════════════════════════════════════════════════════════
+if st.session_state.get("treatment_view"):
+    plan_id = st.session_state["treatment_view"]
+    
+    # Back button
+    if st.button("← Back to Dashboard", key="back_dash"):
+        st.session_state["treatment_view"] = None
+        st.rerun()
+    
+    tasks = get_plan_tasks(plan_id)
+    updates = get_plan_updates(plan_id)
+    
+    # Get plan info
+    conn = sqlite3.connect(DB_PATH)
+    plan_info = conn.execute("SELECT farmer_name, crop, disease FROM treatment_plans WHERE id = ?", (plan_id,)).fetchone()
+    conn.close()
+    
+    st.markdown(f"""
+    <div style='display:flex;justify-content:space-between;align-items:center'>
+        <h3 style='color:#10b981;margin:0'><i class='bi bi-clipboard2-pulse'></i> {plan_info[1]} — Recovery Checklist</h3>
+        <span style='color:#94a3b8;font-size:0.85rem'>Farmer: {plan_info[0]} | {plan_info[2][:40]}</span>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown("<div class='card'><div class='card-title'><i class='bi bi-list-check'></i> Recovery Timeline</div>", unsafe_allow_html=True)
+    
+    for i, task in enumerate(tasks):
+        done = task["completed"]
+        icon = "✅" if done else "⏳"
+        style = "color:#10b981" if done else "color:#94a3b8"
+        st.markdown(f"""
+        <div style='padding:0.75rem 0;border-bottom:1px solid #1e293b'>
+            <span style='{style}'><strong>{icon} {task['stage']}:</strong> {task['task']}</span>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Check if there's an update with image for this task
+        task_update = next((u for u in updates if u['stage'] == task['stage']), None)
+        if task_update:
+            img_path = task_update.get('image')
+            if img_path and os.path.exists(img_path):
+                st.image(img_path, width=180, caption=f"Day {task_update['day']} check-in")
+            verdict = task_update.get('verdict', 'pending')
+            if verdict == 'improving':
+                st.markdown(f"<span style='color:#10b981'>✅ {verdict} — treatment is working!</span>", unsafe_allow_html=True)
+            elif verdict == 'stable':
+                st.markdown(f"<span style='color:#f59e0b'>⏸ {verdict} — no change detected</span>", unsafe_allow_html=True)
+            elif verdict == 'worsening':
+                st.markdown(f"<span style='color:#ef4444'>🔴 {verdict} — needs stronger treatment</span>", unsafe_allow_html=True)
+        
+        # Upload button for this task (if not completed)
+        if not done:
+            with st.expander(f"📷 Upload check-in for {task['stage']}"):
+                up_img = st.file_uploader(f"Photo of {plan_info[1]} on {task['stage']}", type=["jpg", "jpeg", "png"], key=f"up_img_{task['id']}")
+                notes = st.text_area("Your notes (optional):", key=f"notes_{task['id']}")
+                if st.button(f"Submit {task['stage']} check-in", key=f"submit_{task['id']}"):
+                    if up_img:
+                        img_bytes = up_img.read()
+                        img_path = f"progress/plan_{plan_id}_{task['stage'].replace(' ','_')}.jpg"
+                        with open(img_path, "wb") as f:
+                            f.write(img_bytes)
+                        verdict = "pending"
+                        # Try AI comparison if we have the original assessment image
+                        try:
+                            conn2 = sqlite3.connect(DB_PATH)
+                            prev = conn2.execute("SELECT id FROM progress_updates WHERE plan_id = ? ORDER BY id ASC LIMIT 1", (plan_id,)).fetchone()
+                            conn2.close()
+                        except:
+                            prev = None
+                        add_progress_update(plan_id, task['stage'], i+1, img_path, notes or "")
+                        conn = sqlite3.connect(DB_PATH)
+                        conn.execute("UPDATE plan_tasks SET completed = 1 WHERE id = ?", (task['id'],))
+                        conn.commit()
+                        conn.close()
+                        st.success("Progress saved! Continue to the next stage.")
+                        st.rerun()
+                    else:
+                        st.error("Please upload a photo to track progress.")
+    
+    st.markdown("</div>", unsafe_allow_html=True)
+    
+    # Progress summary
+    done_count = sum(1 for t in tasks if t['completed'])
+    st.markdown(f"""
+    <div style='display:flex;gap:1rem;margin-top:0.5rem'>
+        <div class='card' style='flex:1;text-align:center;padding:0.75rem'>
+            <p style='color:#10b981;font-size:1.5rem;margin:0'>{done_count}/{len(tasks)}</p>
+            <p style='color:#64748b;font-size:0.75rem;margin:0'>Tasks Completed</p>
+        </div>
+        <div class='card' style='flex:1;text-align:center;padding:0.75rem'>
+            <p style='color:#f59e0b;font-size:1.5rem;margin:0'>{len(updates)}</p>
+            <p style='color:#64748b;font-size:0.75rem;margin:0'>Photo Check-Ins</p>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-# ── Assessment ledger ────────────────────────────────
-st.markdown("<div class='card'><div class='card-title'>"
-            "<i class='bi bi-database'></i> Assessment History</div>", unsafe_allow_html=True)
-ledger = get_assessments()
-if not ledger.empty:
-    ledger.columns = ["Farmer", "Location", "Crop", "Issue", "Severity", "Date"]
-    st.dataframe(ledger, use_container_width=True, hide_index=True)
+# ══════════════════════════════════════════════════════════
+# CHECK PROGRESS — list all assessments
+# ══════════════════════════════════════════════════════════
+st.markdown("---")
+st.markdown("<h3 style='color:#10b981'><i class='bi bi-search'></i> Check Progress — All Assessments</h3>", unsafe_allow_html=True)
+st.markdown("<p style='color:#94a3b8;font-size:0.85rem'>Select an assessment below to start or continue a recovery checklist for that plant.</p>", unsafe_allow_html=True)
+
+all_ledger = get_assessments()
+if not all_ledger.empty:
+    for idx, row in all_ledger.iterrows():
+        with st.container():
+            c1, c2, c3, c4, c5, c6 = st.columns([1.5, 1, 1, 1, 1, 1.5])
+            with c1: st.markdown(f"<span style='color:#e2e8f0'>{row['farmer_name']}</span>", unsafe_allow_html=True)
+            with c2: st.markdown(f"<span style='color:#10b981'>{row['crop']}</span>", unsafe_allow_html=True)
+            with c3: st.markdown(f"<span style='color:#94a3b8'>{row['disease'][:25]}</span>", unsafe_allow_html=True)
+            with c4:
+                sev = row['severity']
+                sev_color = "#ef4444" if sev == "Severe" else ("#f59e0b" if sev == "Moderate" else "#10b981")
+                st.markdown(f"<span style='color:{sev_color}'>{sev}</span>", unsafe_allow_html=True)
+            with c5: st.markdown(f"<span style='color:#64748b;font-size:0.8rem'>{row['created_at'][:10]}</span>", unsafe_allow_html=True)
+            with c6:
+                # Check if there's a treatment plan for this assessment
+                conn = sqlite3.connect(DB_PATH)
+                existing = conn.execute("SELECT id FROM treatment_plans WHERE farmer_name = ? AND crop = ? ORDER BY id DESC LIMIT 1", 
+                                       (row['farmer_name'], row['crop'])).fetchone()
+                conn.close()
+                if existing:
+                    if st.button(f"Continue →", key=f"continue_{idx}", use_container_width=True):
+                        st.session_state["treatment_view"] = existing[0]
+                        st.rerun()
+                else:
+                    if st.button(f"Treat This Plant", key=f"treat_{idx}", use_container_width=True):
+                        aid = row.get('id', idx + 1)
+                        if sev not in ("None", "Unknown"):
+                            pid = create_treatment_plan(aid, row['farmer_name'], row['crop'], row['disease'])
+                            st.session_state["treatment_view"] = pid
+                            st.rerun()
+                        else:
+                            st.info("This plant appears healthy. No treatment needed.")
+            st.markdown("<hr style='margin:0.25rem 0;border-color:#1e293b'>", unsafe_allow_html=True)
 else:
-    st.markdown("<span style='color:#64748b'><i class='bi bi-database'></i> No assessments yet. Run an analysis to populate the history.</span>", unsafe_allow_html=True)
-st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#64748b'>No assessments yet. Upload a crop photo to get started.</p>", unsafe_allow_html=True)
