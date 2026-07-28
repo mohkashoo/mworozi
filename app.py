@@ -1271,12 +1271,15 @@ if st.session_state.get("analysis_done"):
     share_lang = st.selectbox("Report language:", list(LANGUAGES.keys()), 
                               index=list(LANGUAGES.keys()).index(res.get('language', 'English')) if res.get('language', 'English') in LANGUAGES else 0, key="share_lang")
     
-    # Build recovery steps
+    # Build recovery steps — always include a plan
     steps_txt = ""
     disease_key = res['disease']
+    matched = False
     for k in TREATMENT_PLANS:
         if k.lower() in res['disease'].lower() or res['disease'].lower() in k.lower():
-            disease_key = k; break
+            disease_key = k; matched = True; break
+    if not matched or disease_key not in TREATMENT_PLANS:
+        disease_key = "Northern Corn Leaf Blight"  # Default plan
     if disease_key in TREATMENT_PLANS:
         steps_txt = "\n\nRecovery Checklist:\n"
         for stage, task in TREATMENT_PLANS[disease_key]:
