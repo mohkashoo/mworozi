@@ -450,6 +450,20 @@ def save_assessment(record: dict):
         pass
 
 
+def delete_assessment(row_id: int):
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("DELETE FROM assessments WHERE rowid = ?", (row_id,))
+    conn.commit()
+    conn.close()
+
+
+def update_assessment(row_id: int, field: str, value):
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute(f"UPDATE assessments SET {field} = ? WHERE rowid = ?", (value, row_id))
+    conn.commit()
+    conn.close()
+
+
 # ---------------------------------------------------------------------------
 # Treatment Plan Database
 # ---------------------------------------------------------------------------
@@ -617,7 +631,7 @@ def get_assessments() -> pd.DataFrame:
     try:
         conn = sqlite3.connect(DB_PATH, timeout=10)
         df = pd.read_sql_query(
-            "SELECT farmer_name, location, crop, disease, severity, created_at "
+            "SELECT rowid, farmer_name, location, crop, disease, severity, created_at "
             "FROM assessments ORDER BY created_at DESC LIMIT 50", conn
         )
         conn.close()
@@ -1370,7 +1384,7 @@ all_ledger = get_assessments()
 if not all_ledger.empty:
     for idx, row in all_ledger.iterrows():
         with st.container():
-            c1, c2, c3, c4, c5, c6 = st.columns([1.5, 1, 1, 1, 1, 1.5])
+            c1, c2, c3, c4, c5, c6, c7, c8 = st.columns([1.2, 0.8, 0.9, 0.8, 1, 1, 0.5, 0.5])
             with c1: st.markdown(f"<span style='color:#e2e8f0'>{row['farmer_name']}</span>", unsafe_allow_html=True)
             with c2: st.markdown(f"<span style='color:#10b981'>{row['crop']}</span>", unsafe_allow_html=True)
             with c3: st.markdown(f"<span style='color:#94a3b8'>{row['disease'][:25]}</span>", unsafe_allow_html=True)
@@ -1380,11 +1394,10 @@ if not all_ledger.empty:
                 st.markdown(f"<span style='color:{sev_color}'>{sev}</span>", unsafe_allow_html=True)
             with c5: st.markdown(f"<span style='color:#64748b;font-size:0.8rem'>{row['created_at'][:10]}</span>", unsafe_allow_html=True)
             with c6:
-                # Check if there's a treatment plan for this assessment
-                conn = sqlite3.connect(DB_PATH)
-                existing = conn.execute("SELECT id FROM treatment_plans WHERE farmer_name = ? AND crop = ? ORDER BY id DESC LIMIT 1", 
+                conn_chk = sqlite3.connect(DB_PATH)
+                existing = conn_chk.execute("SELECT id FROM treatment_plans WHERE farmer_name = ? AND crop = ? ORDER BY id DESC LIMIT 1", 
                                        (row['farmer_name'], row['crop'])).fetchone()
-                conn.close()
+                conn_chk.close()
                 if existing:
                     if st.button(f"{t('continue_btn')} →", key=f"continue_{idx}", use_container_width=True):
                         st.session_state["treatment_view"] = existing[0]
@@ -1392,11 +1405,42 @@ if not all_ledger.empty:
                 else:
                     btn_label = f"🌿 {t('keep_healthy_row')}" if sev in ("None", "Unknown") else f"🌱 {t('treat_btn')}"
                     if st.button(btn_label, key=f"treat_{idx}", use_container_width=True):
-                        aid = row.get('id', idx + 1)
                         disease_label = "Keep Healthy" if sev in ("None", "Unknown") else row['disease']
-                        pid = create_treatment_plan(aid, row['farmer_name'], row['crop'], disease_label)
+                        pid = create_treatment_plan(row['rowid'], row['farmer_name'], row['crop'], disease_label)
                         st.session_state["treatment_view"] = pid
                         st.rerun()
+            with c7:
+                if st.button("✏️", key=f"edit_{idx}", help="Edit this assessment", use_container_width=True):
+                    st.session_state[f"editing_{idx}"] = not st.session_state.get(f"editing_{idx}", False)
+            with c8:
+                if st.button("🗑️", key=f"delete_{idx}", help="Remove this assessment", use_container_width=True):
+                    delete_assessment(int(row['rowid']))
+                    st.rerun()
+            
+            # Edit form (collapsible)
+            if st.session_state.get(f"editing_{idx}", False):
+                with st.expander(f"Editing: {row['farmer_name']} — {row['crop']}", expanded=True):
+                    col_a, col_b, col_c = st.columns(3)
+                    with col_a:
+                        new_name = st.text_input("Name", value=row['farmer_name'], key=f"ename_{idx}")
+                        new_crop = st.text_input("Crop", value=row['crop'], key=f"ecrop_{idx}")
+                    with col_b:
+                        new_disease = st.text_input("Disease", value=row['disease'], key=f"edis_{idx}")
+                        new_sev = st.selectbox("Severity", ["Mild", "Moderate", "Severe", "None"], 
+                                              index=["Mild","Moderate","Severe","None"].index(row['severity']) if row['severity'] in ["Mild","Moderate","Severe","None"] else 1,
+                                              key=f"esev_{idx}")
+                    with col_c:
+                        new_loc = st.text_input("Location", value=row['location'], key=f"eloc_{idx}")
+                    
+                    if st.button("Save Changes", key=f"save_{idx}", type="primary"):
+                        update_assessment(int(row['rowid']), 'farmer_name', new_name)
+                        update_assessment(int(row['rowid']), 'crop', new_crop)
+                        update_assessment(int(row['rowid']), 'disease', new_disease)
+                        update_assessment(int(row['rowid']), 'severity', new_sev)
+                        update_assessment(int(row['rowid']), 'location', new_loc)
+                        st.session_state[f"editing_{idx}"] = False
+                        st.rerun()
+            
             st.markdown("<hr style='margin:0.25rem 0;border-color:#1e293b'>", unsafe_allow_html=True)
 else:
     st.markdown(f"<p style='color:#64748b'>{t('no_assessments')}</p>", unsafe_allow_html=True)
