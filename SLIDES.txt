@@ -1,0 +1,133 @@
+=== MWOROZI — Presentation Slide Plan ===
+3-minute demo + 2-minute Q&A | Track 01: Agriculture & BioSystems
+
+=========================================
+SLIDE 1 — TITLE (10 seconds)
+=========================================
+MWOROZI
+AI Crop Health Assistant for East African Farmers
+Frontiers GenAI Hackathon 2026 | Track 01: Agriculture
+Team: [Names]
+
+Speaker: "Mworozi means farmer in Kinyarwanda. We built an AI tool that
+helps farmers detect crop diseases, get treatment plans, and connect
+to buyers — all in their own language."
+
+=========================================
+SLIDE 2 — THE PROBLEM (25 seconds)
+=========================================
+Title: 30-50% of Harvests Lost to Preventable Diseases
+
+Bullet points:
+- 1 extension officer per 10,000 farmers in Rwanda
+- Farmers rely on visual inspection alone
+- Information that exists (FAO, IITA, CGIAR) never reaches the field
+- No way to track treatment progress or access markets
+
+Speaker: "Smallholder farmers lose up to half their crops every season
+to diseases they could treat. Extension officers are outnumbered.
+Farmers make decisions blind."
+
+=========================================
+SLIDE 3 — THE SOLUTION (25 seconds)
+=========================================
+Title: AI-Powered Crop Health — Diagnosis to Market
+
+3 core capabilities:
+1. Snap a photo → Gemini identifies disease + treatment plan
+2. Smart recovery checklist with AI progress tracking
+3. Market prices, buyer contacts, WhatsApp outreach
+
+Speaker: "Three steps: snap photo, get diagnosis with treatment plan,
+access buyers. All in Kinyarwanda, Swahili, French, or English."
+
+=========================================
+SLIDE 4 — DEMO WALKTHROUGH (30 seconds)
+=========================================
+Title: Live Demo — See It Work
+
+Flow on screen:
+1. Upload/take crop photo → click Analyze
+2. Diagnosis appears: disease, severity, treatment, prevention
+3. Share via WhatsApp (translated to Swahili)
+4. Open recovery checklist → Day 1 to Day 14 tasks
+5. Switch to Market tab → see buyers, prices, WhatsApp message
+
+Speaker: "Let me show you. I'll take a photo of this maize leaf.
+Gemini detects Northern Corn Leaf Blight. Treatment appears.
+I tap WhatsApp — the full report opens in Swahili ready to send."
+
+=========================================
+SLIDE 5 — TECH & ARCHITECTURE (20 seconds)
+=========================================
+Title: How It Works Under the Hood
+
+Diagram: Photo → Gemini Vision → Disease + Treatment
+                      ↓
+            Recovery Plan (4-stage checklist)
+                      ↓
+            Market Connect (buyers + prices + WhatsApp)
+                      ↓
+            Languages: EN / RW / SW / FR
+
+Tech: Streamlit, Gemini 3.6-flash, SQLite, Open-Meteo, WhatsApp Web
+
+Speaker: "Gemini Vision analyzes the photo. The treatment plan is
+auto-generated. Market prices come from local data. All shared
+via free WhatsApp and SMS — no API keys, no paid services."
+
+=========================================
+SLIDE 6 — IMPACT & DEPLOYMENT (20 seconds)
+=========================================
+Title: Ready to Deploy — Zero Cost
+
+- Works on basic phones (SMS) to smartphones (camera + WhatsApp)
+- 4 languages covering Rwanda + East Africa
+- $0 cost: free APIs, free deployment on Streamlit Cloud
+- Deployed and live: mworozi.streamlit.app
+- Every recommendation cited: FAO, IITA, CGIAR
+
+Speaker: "Farmers pay nothing. The app works on any phone.
+We're ready to pilot with 10 cooperatives tomorrow."
+
+=========================================
+SLIDE 7 — BONUS FEATURES (15 seconds)
+=========================================
+Title: Built for Judging Criteria
+
+- Human Approval: low-confidence flags require verification
+- Evaluation Metrics: AI confidence + severity tracking
+- Personalization: budget constraint + location weather
+- Accessibility: voice, multi-language, SMS for basic phones
+
+Speaker: "We checked every bonus box. Human in the loop, metrics
+on every diagnosis, personalized to budget and weather."
+
+=========================================
+SLIDE 8 — CLOSE (10 seconds)
+=========================================
+Title: Thank You / Questions?
+
+Live: mworozi.streamlit.app
+GitHub: github.com/mohkashoo/mworozi
+
+Speaker: "Mworozi. Snap a photo. Save a harvest. Questions?"
+
+=========================================
+DEMO SCRIPT (for the 3-minute demo)
+=========================================
+0:00-0:30 — Slide 1-2: Problem
+0:30-1:00 — Slide 3: Solution overview
+1:00-2:00 — Slide 4: LIVE DEMO (the most important part)
+  - Upload/take photo
+  - Show diagnosis
+  - Show recovery checklist
+  - Share via WhatsApp in Swahili
+  - Show market tab
+2:00-2:30 — Slide 5-7: Tech, Impact, Bonuses
+2:30-3:00 — Slide 8: Close + Q&A
+
+TOP 3 THINGS JUDGES CARE ABOUT:
+1. Does it solve a real problem? YES — farmers lose crops daily
+2. Is it AI-powered in a meaningful way? YES — Gemini Vision + text
+3. Is it usable by the target audience? YES — 4 languages, SMS, free
