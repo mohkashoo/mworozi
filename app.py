@@ -592,7 +592,7 @@ with st.sidebar:
 
     img_source = st.radio(
         "Image source",
-        ["📷 Take Photo", "📁 Upload Photo", "🧪 Demo Sample"],
+        ["📁 Upload Photo", "📷 Take Photo", "🧪 Demo Sample"],
         key="img_source",
         label_visibility="collapsed",
     )
