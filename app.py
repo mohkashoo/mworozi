@@ -377,11 +377,13 @@ If the crop appears healthy, say "No disease detected — crop appears healthy."
 
         # Determine severity from response
         severity = "Moderate"
-        if "Severe" in text or "severe" in text:
+        # Look for actual severity keyword in the text (avoid matching section header "## 2. Severity")
+        text_lower = text.lower()
+        if "**severe**" in text_lower or "severity: severe" in text_lower or text_lower.count("severe") > text_lower.count("severity"):
             severity = "Severe"
-        elif "Mild" in text or "mild" in text:
+        elif "**mild**" in text_lower or "severity: mild" in text_lower:
             severity = "Mild"
-        elif "No disease" in text or "healthy" in text.lower():
+        elif "no disease" in text_lower or "crop appears healthy" in text_lower:
             severity = "None"
 
         # Extract disease name (first line after ## 1.)
