@@ -97,6 +97,9 @@ def init_db():
         human_verified INTEGER DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
     conn.execute("""CREATE TABLE IF NOT EXISTS alerts (id INTEGER PRIMARY KEY AUTOINCREMENT,
         plot_id INTEGER, alert_type TEXT, message TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
+    conn.execute("""CREATE TABLE IF NOT EXISTS assessments (id INTEGER PRIMARY KEY AUTOINCREMENT,
+        farmer_name TEXT, location TEXT, crop TEXT, disease TEXT, severity TEXT, treatment TEXT,
+        language TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
     conn.commit()
     conn.close()
 
@@ -112,6 +115,19 @@ def register_plot(farmer, location, crop, planting_date, plot_size, budget):
 def get_plots():
     conn = sqlite3.connect(DB_PATH)
     df = pd.read_sql("SELECT rowid AS row_id, * FROM plots ORDER BY created_at DESC", conn)
+    conn.close()
+    return df
+
+def save_assessment(farmer, location, crop, disease, severity, treatment, language):
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("INSERT INTO assessments (farmer_name, location, crop, disease, severity, treatment, language) VALUES (?,?,?,?,?,?,?)",
+                 (farmer, location, crop, disease, severity, treatment, language))
+    conn.commit()
+    conn.close()
+
+def get_assessments():
+    conn = sqlite3.connect(DB_PATH)
+    df = pd.read_sql("SELECT rowid AS row_id, farmer_name, location, crop, disease, severity, language, created_at FROM assessments ORDER BY created_at DESC LIMIT 30", conn)
     conn.close()
     return df
 
@@ -351,24 +367,36 @@ Provide your analysis in this EXACT format:
 If the crop appears healthy, say "No disease detected — crop appears healthy." and skip treatment/prevention.""", 800)
 
                 if diagnosis:
+                    # Extract disease + severity (must be before use)
+                    sev = "Moderate"
+                    if "Severe" in diagnosis or "severe" in diagnosis: sev = "Severe"
+                    elif "Mild" in diagnosis or "mild" in diagnosis: sev = "Mild"
+                    elif "healthy" in diagnosis.lower(): sev = "None"
+                    disease_name = diagnosis.split("## Disease")[1].split("\n")[0].replace("/ Issue", "").strip() if "## Disease" in diagnosis else "See analysis"
+
+                    # Save to DB
+                    crop_guessed = "Unknown"
+                    for c in THREE_CROPS:
+                        if c.lower() in diagnosis.lower(): crop_guessed = c; break
+                    save_assessment("Quick Scan", "Kigali", crop_guessed, disease_name, sev, diagnosis[:500], "English")
+
                     # Store for dashboard display
                     st.session_state["quick_scan_result"] = {"diagnosis": diagnosis, "severity": sev, "disease": disease_name, "img_bytes": img_bytes}
                     
                     st.markdown(f"<div class='card' style='padding:0.75rem'><p style='color:#e2e8f0;font-size:0.85rem'>{diagnosis[:300]}...</p></div>", unsafe_allow_html=True)
                     
-                    # Extract disease + severity
-                    sev = "Moderate"
-                    if "Severe" in diagnosis or "severe" in diagnosis: sev = "Severe"
-                    elif "Mild" in diagnosis or "mild" in diagnosis: sev = "Mild"
-                    elif "healthy" in diagnosis.lower(): sev = "None"
+                    # Share language dropdown
+                    share_lang = st.selectbox("Report language:", list(LANGUAGES.keys()), key="share_lang_quick")
+                    share_text = f"🌱 AgriScope AI Diagnosis\n\n🦠 {disease_name}\n⚠️ Severity: {sev}\n\n{diagnosis[:600]}"
                     
-                    disease_name = diagnosis.split("## Disease")[1].split("\n")[0].replace("/ Issue", "").strip() if "## Disease" in diagnosis else "See analysis"
+                    if share_lang != "English" and gemini_client:
+                        with st.spinner(f"Translating to {share_lang}..."):
+                            translated = ask_gemini(f"Translate this crop diagnosis into {share_lang}. Keep ALL emojis (🌱🦠⚠️📋) exactly as they are. Only translate the words:\n\n{share_text}", 800)
+                            if translated: share_text = translated
                     
-                    # Share buttons
-                    share_msg = f"🌱 AgriScope AI Diagnosis\n\n🦠 {disease_name}\n⚠️ Severity: {sev}\n\n{diagnosis[:800]}"
-                    wa_url = f"https://wa.me/?text={urllib.parse.quote(share_msg[:1500])}"
-                    sms_url = f"sms:?body={urllib.parse.quote(share_msg[:400])}"
-                    
+                    import urllib.parse
+                    wa_url = f"https://wa.me/?text={urllib.parse.quote(share_text[:1500])}"
+                    sms_url = f"sms:?body={urllib.parse.quote(share_text[:450])}"
                     col1, col2 = st.columns(2)
                     with col1: st.markdown(f'<a href="{wa_url}" target="_blank"><button style="width:100%;padding:0.4rem;border-radius:8px;border:1px solid #25D366;background:transparent;color:#25D366;cursor:pointer;font-size:0.8rem">💬 WhatsApp</button></a>', unsafe_allow_html=True)
                     with col2: st.markdown(f'<a href="{sms_url}"><button style="width:100%;padding:0.4rem;border-radius:8px;border:1px solid #3b82f6;background:transparent;color:#3b82f6;cursor:pointer;font-size:0.8rem">📱 SMS</button></a>', unsafe_allow_html=True)
@@ -557,3 +585,13 @@ Cite: FAO, IITA.""", 400)
                 st.markdown("<div class='card'>", unsafe_allow_html=True)
                 st.markdown(advice)
                 st.markdown(f"<p style='color:#64748b;font-size:0.7rem;margin-top:0.5rem'>Sources: Market data, FAO</p></div>", unsafe_allow_html=True)
+
+# ── Assessment History (always visible) ────────────────────
+st.markdown("---")
+st.markdown("<h3 style='color:#10b981'><i class='bi bi-database'></i> Assessment History</h3>", unsafe_allow_html=True)
+assessments_df = get_assessments()
+if not assessments_df.empty:
+    assessments_df.columns = ["ID", "Farmer", "Location", "Crop", "Disease", "Severity", "Language", "Date"]
+    st.dataframe(assessments_df[["Farmer", "Location", "Crop", "Disease", "Severity", "Date"]], use_container_width=True, hide_index=True)
+else:
+    st.markdown(f"<p style='color:#64748b'>No assessments yet. Upload a crop photo to start.</p>", unsafe_allow_html=True)
