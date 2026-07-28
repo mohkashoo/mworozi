@@ -1329,17 +1329,28 @@ if st.session_state.get("analysis_done"):
             with st.spinner(f"Translating to {share_lang}..."):
                 resp = gemini_client.models.generate_content(
                     model=GEMINI_MODEL,
-                    contents=f"Translate this crop diagnosis into {share_lang}. IMPORTANT: Keep ALL emojis (🌱🌾🦠⚠️💊📋✅) exactly as they are. Keep the exact same structure and line breaks. Only translate the English words. Do not add or remove any emojis:\n\n{share_text}",
-                    config={"temperature": 0.2, "max_output_tokens": 1500}
+                    contents=f"""Translate this ENTIRE crop diagnosis into {share_lang}. 
+Rules:
+1. Keep ALL emojis (🌱🌾🦠⚠️💊📋✅) exactly as they appear — do not change or remove any emoji
+2. Keep the exact same line structure and line breaks
+3. Translate every word including the disease name, severity, treatment steps, and recovery plan
+4. Do NOT shorten or summarize — translate the FULL text
+5. The crop name "{res['crop']}" should be kept as-is
+
+Here is the text to translate:
+{share_text}""",
+                    config={"temperature": 0.2, "max_output_tokens": 2000}
                 )
-                final_text = resp.text
+                final_text = resp.text.strip()
+                # Show preview
+                st.text_area("Translated report:", final_text, height=200, key="translated_preview")
         except Exception:
             pass
 
     # URL-encode for the WhatsApp/SMS links
     import urllib.parse
-    wa_url = f"https://wa.me/?text={urllib.parse.quote(final_text[:1800])}"
-    sms_url = f"sms:?body={urllib.parse.quote(final_text[:400])}"
+    wa_url = f"https://wa.me/?text={urllib.parse.quote(final_text[:2000])}"
+    sms_url = f"sms:?body={urllib.parse.quote(final_text[:450])}"
     col_share, col_sms, col_csv = st.columns([1, 1, 1])
     with col_share:
         st.markdown(f'<a href="{wa_url}" target="_blank"><button style="width:100%;padding:0.5rem;border-radius:8px;border:1px solid #25D366;background:transparent;color:#25D366;cursor:pointer;font-size:0.85rem">💬 WhatsApp</button></a>', unsafe_allow_html=True)
