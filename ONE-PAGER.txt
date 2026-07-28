@@ -1,0 +1,77 @@
+=== MWOROZI — AI CROP HEALTH ASSISTANT ===
+Frontiers GenAI Hackathon 2026 | Track 01: Agriculture
+Team: [Your Team Name]
+
+=========================================
+PROBLEM
+=========================================
+Smallholder farmers in Rwanda lose 30-60% of crops to preventable diseases.
+Extension officers are outnumbered 1:10,000. Most farmers rely on visual
+inspection alone with no access to expert advice.
+
+=========================================
+SOLUTION
+=========================================
+A mobile-friendly AI assistant that:
+1. Identifies crop diseases from a photo (Gemini Vision)
+2. Provides treatment plans with locally available materials
+3. Tracks recovery through photo check-ins with AI progress analysis
+4. Works in English, Kinyarwanda, Swahili, and French
+5. Reads treatments aloud for farmers with limited literacy
+
+=========================================
+HOW IT WORKS
+=========================================
+Farmer uploads photo → Gemini Vision detects disease
+    → AI generates treatment plan with daily tasks
+    → Farmer uploads follow-up photos at each stage
+    → AI compares before/after → reports improving/stable/worsening
+    → Dashboard tracks recovery across all plants
+
+=========================================
+TECH STACK
+=========================================
+Frontend:  Streamlit + Bootstrap Icons + dark theme
+AI:        Google Gemini (vision + text)
+Voice:    gTTS with speed control (0.75x - 1.5x)
+Database: SQLite with Pandas
+Demo:     Pre-loaded disease samples + cached audio
+
+=========================================
+KEY FEATURES
+=========================================
+• Disease detection from photo (real or demo)
+• Smart Treatment Plan with staged recovery checklist
+• AI progress tracking (before/after photo comparison)
+• Voice playback in farmer's language
+• Multi-language support (EN, RW, SW, FR)
+• Treatment dashboard with recovery metrics
+• Chat-style check-in for each plant
+• Keep Healthy checklist for disease prevention
+• Full assessment history and ledger
+
+=========================================
+ETHICS & BONUSES
+=========================================
+✓ Human-in-the-loop (AI advises, farmer decides)
+✓ Evaluation metrics (confidence score, recovery rate)
+✓ Personalization (resources, season, crop, location)
+✓ Accessible (voice, dark theme, large buttons)
+✓ Privacy-first (local SQLite, no cloud storage)
+
+=========================================
+BUSINESS MODEL / DEPLOYMENT
+=========================================
+Phase 1: Free pilot with 5 cooperatives in Rwanda
+Phase 2: Freemium — free diagnosis, paid premium plans
+Phase 3: Partner with Ministry of Agriculture for national rollout
+Cost: $0 software. Runs on any laptop or phone browser.
+
+=========================================
+WHY THIS WINS
+=========================================
+• Real problem affecting millions of farmers
+• Works offline with demo data (no internet? no problem)
+• Voice support for low-literacy users
+• Track record: Gemini API + Streamlit = reliable demo
+• Scalable: one laptop serves an entire village
